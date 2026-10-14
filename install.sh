@@ -2,6 +2,8 @@
 # Claude Status Monitor — instalador.
 #
 # Uso: ./install.sh [--target ALVO]... [opções]      instala/atualiza (idempotente)
+#      ./install.sh --update [opções]                baixa a versão nova (git pull) e reinstala
+#                                                    os alvos já instalados
 #      ./install.sh --uninstall [--target ALVO]...   remove (o config é mantido)
 #
 # Opções (gravadas em ~/.config/claude-status/config, que também pode ser editado):
@@ -20,6 +22,9 @@
 #   waybar  copia waybar/claude-status-waybar.sh para ~/.local/bin
 #   macos   copia o plugin para a pasta do SwiftBar/xbar (ou --plugin-dir DIR)
 #   kde     instala/atualiza o plasmoid com kpackagetool6
+#
+# Os alvos instalados ficam em targets= no config; o --update usa essa lista (ou, em
+# instalações anteriores à v1.2, detecta o que está instalado). Só o --update usa a rede.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -50,6 +55,7 @@ opt_warn="" opt_crit="" opt_inactive="" opt_lang=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --uninstall) mode="uninstall" ;;
+    --update) mode="update" ;;
     --target)
       case "${2:-}" in
         gnome|waybar|macos|kde) targets+=("$2") ;;
@@ -76,6 +82,26 @@ config_get() {
   [ -f "$CONFIG" ] || return 0
   sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\([^[:space:]]*\).*/\1/p" "$CONFIG" | tail -n 1
 }
+# Grava uma chave no config sem mexer no resto (comentários e edições à mão ficam).
+config_set() {
+  local tmp
+  tmp="$(mktemp "$CONFIG.XXXXXX")"
+  awk -v k="$1" -v v="$2" '
+    $0 ~ "^[[:space:]]*" k "[[:space:]]*=" { if (!done) print k "=" v; done = 1; next }
+    { print }
+    END { if (!done) print k "=" v }
+  ' "$CONFIG" > "$tmp"
+  mv -f "$tmp" "$CONFIG"
+}
+
+# Lista de alvos "a,b" sem repetição, na ordem canônica.
+targets_join() {
+  local out="" t
+  for t in gnome kde waybar macos; do
+    case " $* " in *" $t "*) out="${out:+$out,}$t" ;; esac
+  done
+  printf '%s\n' "$out"
+}
 in_range() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
 
 # Valida tudo antes de alterar qualquer coisa: flags vencem o config, que vence o padrão.
@@ -83,7 +109,7 @@ warn="${opt_warn:-$(config_get warn)}"; warn="${warn:-70}"
 crit="${opt_crit:-$(config_get crit)}"; crit="${crit:-90}"
 inactive="${opt_inactive:-$(config_get inactive)}"; inactive="${inactive:-15}"
 lang="${opt_lang:-$(config_get lang)}"; lang="${lang:-auto}"
-if [ "$mode" = "install" ]; then
+if [ "$mode" != "uninstall" ]; then
   in_range "$warn" 1 100 || die "--warn precisa ser um número de 1 a 100 (recebido: $warn)"
   in_range "$crit" 1 100 || die "--crit precisa ser um número de 1 a 100 (recebido: $crit)"
   in_range "$inactive" 1 1440 || die "--inactive precisa ser um número de 1 a 1440 (recebido: $inactive)"
@@ -91,24 +117,49 @@ if [ "$mode" = "install" ]; then
   case "$lang" in auto|en|pt) ;; *) die "--lang precisa ser auto, en ou pt (recebido: $lang)" ;; esac
 fi
 
-# Cria o config na primeira instalação; depois só reescreve se alguma flag foi passada,
-# para não apagar o que a pessoa editou à mão.
+# Cria o config na primeira instalação; depois só grava as chaves das flags passadas,
+# para não apagar o que a pessoa editou à mão. targets= acompanha os alvos instalados.
 write_config() {
-  if [ -f "$CONFIG" ] && [ -z "$opt_warn$opt_crit$opt_inactive$opt_lang" ]; then
-    echo "config: $CONFIG (sem alterações)"
-    return 0
+  local recorded new changed=""
+  recorded="$(config_get targets | tr ',' ' ')"
+  if [ "$mode" = "install" ]; then
+    new="$(targets_join $recorded ${targets[@]+"${targets[@]}"})"
+  else
+    # Sem "case" dentro de $( ): o bash 3.2 (macOS) não entende o ")" do padrão ali.
+    local keep="" t
+    for t in $recorded; do
+      case " ${targets[*]-} " in *" $t "*) ;; *) keep="$keep $t" ;; esac
+    done
+    new="$(targets_join $keep)"
   fi
-  mkdir -p "$(dirname "$CONFIG")"
-  cat > "$CONFIG" <<CONF
+  if [ ! -f "$CONFIG" ]; then
+    [ "$mode" = "install" ] || return 0
+    mkdir -p "$(dirname "$CONFIG")"
+    cat > "$CONFIG" <<CONF
 # Claude Status Monitor — configuração (pode editar; vale para statusline, waybar, macOS e KDE)
 # warn: % para ficar amarelo · crit: % para ficar vermelho · inactive: minutos até esconder a janela
-# lang: auto (idioma do sistema), en ou pt
+# lang: auto (idioma do sistema), en ou pt · targets: mostradores instalados (usado pelo --update)
 warn=$warn
 crit=$crit
 inactive=$inactive
 lang=$lang
+targets=$new
 CONF
-  echo "config: $CONFIG (amarelo ${warn}%, vermelho ${crit}%, inativa após ${inactive} min, idioma $lang)"
+    echo "config: $CONFIG (amarelo ${warn}%, vermelho ${crit}%, inativa após ${inactive} min, idioma $lang)"
+    return 0
+  fi
+  if [ -n "$opt_warn" ]; then config_set warn "$warn"; changed=1; fi
+  if [ -n "$opt_crit" ]; then config_set crit "$crit"; changed=1; fi
+  if [ -n "$opt_inactive" ]; then config_set inactive "$inactive"; changed=1; fi
+  if [ -n "$opt_lang" ]; then config_set lang "$lang"; changed=1; fi
+  if [ "$new" != "$(targets_join $recorded)" ]; then
+    config_set targets "$new"
+  fi
+  if [ -n "$changed" ]; then
+    echo "config: $CONFIG (amarelo ${warn}%, vermelho ${crit}%, inativa após ${inactive} min, idioma $lang)"
+  else
+    echo "config: $CONFIG (sem alterações)"
+  fi
 }
 
 # ---------------------------------------------------------------- settings.json
@@ -278,9 +329,56 @@ kde_uninstall() {
   return 0
 }
 
+# ---------------------------------------------------------------- atualização
+
+# Alvos já instalados, para instalações sem targets= (anteriores à v1.2).
+detect_targets() {
+  if [ -L "$GNOME_DIR" ] && [ "$(readlink "$GNOME_DIR")" = "$HERE/extension" ]; then echo gnome; fi
+  if have kpackagetool6 && kpackagetool6 -t Plasma/Applet -s "$KDE_ID" >/dev/null 2>&1; then echo kde; fi
+  if [ -e "$WAYBAR_MODULE" ]; then echo waybar; fi
+  local dir f
+  dir="$( (macos_dir) 2>/dev/null || true)"
+  for f in "$dir"/claude-status.*.sh; do
+    if [ -n "$dir" ] && [ -f "$f" ] && grep -q "$MACOS_MARK" "$f"; then echo macos; break; fi
+  done
+}
+
+# git pull no repositório e roda o install.sh novo com os alvos já instalados (+ --target extras).
+update() {
+  have git || die "update: git não encontrado"
+  git -C "$HERE" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+    || die "update: $HERE não é um clone do git; baixe a versão nova do GitHub e rode ./install.sh de novo"
+  local old new list args=() t
+  old="$(git -C "$HERE" rev-parse HEAD)"
+  echo "update: buscando a versão nova (git pull)..."
+  git -C "$HERE" pull --ff-only --quiet \
+    || die "update: git pull falhou; nada foi reinstalado (mudanças locais? veja: git -C $HERE status)"
+  new="$(git -C "$HERE" rev-parse HEAD)"
+  if [ "$old" = "$new" ]; then
+    echo "update: o código já estava na versão mais recente; reinstalando mesmo assim"
+  else
+    echo "update: novidades:"
+    git -C "$HERE" log --oneline --no-decorate "$old..$new" | sed 's/^/  /'
+  fi
+  list="$(config_get targets | tr ',' ' ')"
+  [ -n "$list" ] || list="$(detect_targets | tr '\n' ' ')"
+  list="$(targets_join $list ${targets[@]+"${targets[@]}"} | tr ',' ' ')"
+  for t in $list; do args+=(--target "$t"); done
+  if [ -n "$opt_warn" ]; then args+=(--warn "$opt_warn"); fi
+  if [ -n "$opt_crit" ]; then args+=(--crit "$opt_crit"); fi
+  if [ -n "$opt_inactive" ]; then args+=(--inactive "$opt_inactive"); fi
+  if [ -n "$opt_lang" ]; then args+=(--lang "$opt_lang"); fi
+  if [ -n "$plugin_dir" ]; then args+=(--plugin-dir "$plugin_dir"); fi
+  if [ -n "${list// /}" ]; then echo "update: reinstalando (alvos: ${list% })"
+  else echo "update: reinstalando só a ponte (nenhum mostrador instalado foi encontrado)"; fi
+  exec "$HERE/install.sh" ${args[@]+"${args[@]}"}
+}
+
 # ---------------------------------------------------------------- execução
 
-if [ "$mode" = "install" ]; then
+if [ "$mode" = "update" ]; then
+  update
+elif [ "$mode" = "install" ]; then
   mkdir -p "$BIN_DIR"
   install -m 755 "$HERE/bridge/claude-status-bridge.sh" "$BRIDGE"
   install -m 755 "$HERE/bridge/claude-status-summary.sh" "$SUMMARY"
@@ -293,5 +391,6 @@ else
   rm -f "$BRIDGE" "$SUMMARY"
   echo "ponte e resumidor removidos de $BIN_DIR"
   update_settings
+  write_config
   if [ -f "$CONFIG" ]; then echo "config mantido em $CONFIG (apague à mão se quiser)"; fi
 fi

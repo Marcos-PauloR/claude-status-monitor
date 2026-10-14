@@ -77,7 +77,7 @@ Os mostradores fora do GNOME não repetem a lógica do `store.js`: usam o **resu
 | macOS | `macos/claude-status.5s.sh` (SwiftBar/xbar) | intervalo do nome do arquivo (5 s) |
 | KDE Plasma 6 | plasmoid `kde/org.claudestatus.monitor` (QML, motor `executable`) | intervalo configurável (5 s) |
 
-A instalação de cada um é `./install.sh --target gnome|kde|waybar|macos`.
+A instalação de cada um é `./install.sh --target gnome|kde|waybar|macos`. Os alvos instalados ficam em `targets=` no config único, e `./install.sh --update` (v1.2) faz `git pull` e reinstala esses alvos. Em instalações anteriores, sem `targets=`, ele detecta o que está instalado.
 
 ## 5. Contrato do snapshot (v1)
 
@@ -137,7 +137,7 @@ A UI (painel, menu e preferências) tem inglês e português: `language` = auto 
 
 - **Custo de tokens em runtime: zero.** Nenhuma chamada de modelo e nenhuma API.
 - Leve: no máximo 1 leitura de arquivo por evento, sem polling abaixo de 30 s e sem processos residentes além do próprio Shell.
-- Seguro: não lê `~/.claude/.credentials.json` nem nenhum token, e não faz requisições de rede.
+- Seguro: não lê `~/.claude/.credentials.json` nem nenhum token, e não faz requisições de rede em runtime. A única exceção é o `install.sh --update`, que a pessoa roda por conta própria (`git pull`).
 - Robusto: um JSON inválido ou parcial é ignorado com log em `journalctl`, sem derrubar a extensão.
 - Passa pelos critérios de revisão do extensions.gnome.org (limpeza total em `disable()`), mesmo que não seja publicada.
 

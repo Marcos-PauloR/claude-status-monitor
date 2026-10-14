@@ -168,4 +168,55 @@ inst --target gnome --warn 60 --lang pt
 eq "flags passadas vão para o GSettings" "true" "$(grep -q 'gsettings --schemadir .* set org.gnome.shell.extensions.claude-status warn-threshold 60' "$LOG" && grep -q 'language pt' "$LOG" && echo true || echo false)"
 eq "flags não passadas não vão" "0" "$(grep -c 'crit-threshold\|inactive-minutes' "$LOG")"
 
+echo "== targets no config (T15)"
+rm -rf "$HOME"; mkdir -p "$HOME"
+stub kpackagetool6 1
+inst --target waybar
+eq "primeira instalação grava o alvo" "waybar" "$(cval targets)"
+inst --target kde
+eq "alvo novo soma aos anteriores (ordem fixa)" "kde,waybar" "$(cval targets)"
+inst
+eq "sem --target: lista intacta" "kde,waybar" "$(cval targets)"
+inst --uninstall --target waybar
+eq "desinstalar um alvo tira só ele" "kde" "$(cval targets)"
+printf 'warn=55\n# meu comentário\n' > "$C"
+inst
+eq "config à mão sem alvo novo: nada acrescentado" "warn=55|# meu comentário" "$(paste -sd'|' "$C")"
+inst --target waybar
+eq "config à mão: targets acrescentado, resto intacto" "warn=55|# meu comentário|targets=waybar" "$(paste -sd'|' "$C")"
+
+echo "== --update (T15)"
+rm -rf "$HOME"; mkdir -p "$HOME"
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t GIT_CONFIG_GLOBAL=/dev/null
+ORIGIN="$TMP/origin"; CLONE="$TMP/clone"
+mkdir -p "$ORIGIN"
+(cd "$HERE" && git ls-files -co --exclude-standard | while read -r f; do [ -e "$f" ] && mkdir -p "$ORIGIN/$(dirname "$f")" && cp -p "$f" "$ORIGIN/$f"; done)
+git -C "$ORIGIN" init -q -b main && git -C "$ORIGIN" add -A && git -C "$ORIGIN" commit -qm "v1.1"
+git clone -q "$ORIGIN" "$CLONE"
+up() { OUT="$("$CLONE/install.sh" "$@" 2>&1)"; RC=$?; }
+up --target waybar
+echo "# versão nova" >> "$ORIGIN/bridge/claude-status-bridge.sh"
+git -C "$ORIGIN" commit -qam "ponte nova"
+up --update
+eq "exit 0" 0 "$RC"
+eq "mostra as novidades" "true" "$(grep -q 'ponte nova' <<<"$OUT" && echo true || echo false)"
+eq "ponte instalada é a nova" "# versão nova" "$(tail -n 1 "$B")"
+eq "reinstala o alvo gravado" "true" "$(grep -q 'alvos: waybar' <<<"$OUT" && [ -x "$HOME/.local/bin/claude-status-waybar.sh" ] && echo true || echo false)"
+up --update
+eq "já na última versão: reinstala mesmo assim" "true" "$([ "$RC" = 0 ] && grep -q 'já estava' <<<"$OUT" && grep -q 'alvos: waybar' <<<"$OUT" && echo true || echo false)"
+sed -i.bak '/^targets=/d' "$C"; rm -f "$C.bak"
+up --update
+eq "sem targets= (v1.1): detecta o que está instalado" "true" "$(grep -q 'alvos: waybar' <<<"$OUT" && echo true || echo false)"
+eq "sem targets= (v1.1): passa a gravar" "waybar" "$(cval targets)"
+up --update --lang pt --target kde
+eq "flags e --target extra repassados" "pt kde,waybar" "$(cval lang) $(cval targets)"
+echo "local" >> "$CLONE/bridge/claude-status-bridge.sh"
+echo "# conflito" >> "$ORIGIN/bridge/claude-status-bridge.sh"; git -C "$ORIGIN" commit -qam "conflito"
+before="$(cat "$B")"
+up --update
+eq "git pull falha: exit 1, nada reinstalado" "true" "$([ "$RC" = 1 ] && grep -q 'nada foi reinstalado' <<<"$OUT" && [ "$(cat "$B")" = "$before" ] && echo true || echo false)"
+rm -rf "$CLONE/.git"
+up --update
+eq "sem .git: exit 1 com instrução" "true" "$([ "$RC" = 1 ] && grep -q 'não é um clone' <<<"$OUT" && echo true || echo false)"
+
 echo; echo "Resultado: $PASS ok, $FAIL falha(s)"; [ "$FAIL" -eq 0 ]
