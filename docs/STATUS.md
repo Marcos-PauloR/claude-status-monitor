@@ -10,6 +10,12 @@ Atualizado em 2026-10-14.
 | T4 Extensão: menu (dropdown por janela) | ✅ pronta e validada na sessão real |
 | T5 Preferências | ✅ pronta e validada na sessão real |
 | T6 Validação final (SPEC §9) | 🟡 automática ok; faltam 2 checagens visuais (abaixo) |
+| **v1.1** | |
+| T7 Resumidor + portabilidade (macOS) | ✅ pronta — `bridge/test-summary.sh` (31 ok); ponte 62 ok e instalador 32 ok também no **bash 3.2** (imagem `bash:3.2`, mesma versão do macOS) |
+| T8 waybar | ⏳ próxima |
+| T9 macOS (SwiftBar/xbar) | — |
+| T10 KDE Plasma 6 (plasmoid) | — |
+| T11 Docs e instalação por plataforma | — |
 
 ## Instalação atual da extensão
 

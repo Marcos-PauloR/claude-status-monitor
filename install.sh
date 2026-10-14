@@ -4,7 +4,7 @@
 # Uso: ./install.sh              instala/atualiza (idempotente)
 #      ./install.sh --uninstall  remove a ponte e as entradas do settings.json
 #
-# - Copia bridge/claude-status-bridge.sh para ~/.local/bin.
+# - Copia a ponte e o resumidor (bridge/claude-status-{bridge,summary}.sh) para ~/.local/bin.
 # - Faz merge de statusLine e dos hooks PreCompact/SessionEnd em ~/.claude/settings.json,
 #   sempre com backup (settings.json.bak-AAAAMMDD-HHMMSS) antes de alterar.
 set -euo pipefail
@@ -12,6 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="$HOME/.local/bin"
 BRIDGE="$BIN_DIR/claude-status-bridge.sh"
+SUMMARY="$BIN_DIR/claude-status-summary.sh"
 SETTINGS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
 MARK="claude-status-bridge.sh"   # identifica as entradas criadas por este instalador
 
@@ -59,10 +60,11 @@ fi
 if [ "$mode" = "install" ]; then
   mkdir -p "$BIN_DIR"
   install -m 755 "$HERE/bridge/claude-status-bridge.sh" "$BRIDGE"
-  echo "ponte instalada em $BRIDGE"
+  install -m 755 "$HERE/bridge/claude-status-summary.sh" "$SUMMARY"
+  echo "ponte instalada em $BRIDGE (resumidor: $SUMMARY)"
 else
-  rm -f "$BRIDGE"
-  echo "ponte removida de $BRIDGE"
+  rm -f "$BRIDGE" "$SUMMARY"
+  echo "ponte e resumidor removidos de $BIN_DIR"
 fi
 
 if [ "$(jq -S . <<<"$current")" = "$(jq -S . <<<"$updated")" ]; then
@@ -79,8 +81,9 @@ fi
 
 tmp="$(mktemp "$SETTINGS.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
+# cp -p copia a permissão do original (portável: chmod --reference não existe no macOS).
+[ -f "$SETTINGS" ] && cp -p "$SETTINGS" "$tmp"
 printf '%s\n' "$updated" > "$tmp"
-[ -f "$SETTINGS" ] && chmod --reference="$SETTINGS" "$tmp"
 mv -f "$tmp" "$SETTINGS"
 trap - EXIT
 

@@ -49,7 +49,7 @@ eq "limits" '{"five_hour":{"used_pct":31,"resets_at":1760460000},"seven_day":{"u
 eq "cost_usd" "1.2345" "$(snap sess-full-001 .cost_usd)"
 ua=$(snap sess-full-001 .updated_at)
 eq "updated_at = agora" "true" "$([ "$ua" -ge "$before" ] && [ "$ua" -le "$after" ] && echo true || echo false)"
-eq "sem arquivos temporários sobrando" "1" "$(find "$SESS" -type f | wc -l)"
+eq "sem arquivos temporários sobrando" "1" "$(find "$SESS" -type f | wc -l | tr -d ' ')"
 eq "compacts" "0" "$(snap sess-full-001 .compacts)"
 
 echo "== no-limits.json (antes da 1ª resposta com rate_limits)"
@@ -83,18 +83,18 @@ eq "arquivo com id saneado" "true" "$([ -f "$SESS/______etc_evil.json" ] && echo
 eq "session_id original preservado no conteúdo" '"../../etc/evil"' "$(snap ______etc_evil .session_id)"
 
 echo "== invalid.json (JSON quebrado)"
-count_before=$(find "$SESS" -type f | wc -l)
+count_before=$(find "$SESS" -type f | wc -l | tr -d ' ')
 run invalid.json
 eq "exit 0" 0 "$RC"
 eq "linha mínima" "Claude" "$OUT"
-eq "nenhum snapshot novo" "$count_before" "$(find "$SESS" -type f | wc -l)"
+eq "nenhum snapshot novo" "$count_before" "$(find "$SESS" -type f | wc -l | tr -d ' ')"
 eq "stderr vazio" "" "$(cat "$TMP/stderr")"
 
 echo "== no-session-id.json"
 run no-session-id.json
 eq "exit 0" 0 "$RC"
 eq "statusline ainda sai" "Opus 5.5 · ctx 5%" "$OUT"
-eq "nenhum snapshot novo" "$count_before" "$(find "$SESS" -type f | wc -l)"
+eq "nenhum snapshot novo" "$count_before" "$(find "$SESS" -type f | wc -l | tr -d ' ')"
 
 echo "== stdin vazio"
 OUT="$("$BRIDGE" < /dev/null 2>"$TMP/stderr")"; RC=$?
@@ -118,7 +118,7 @@ run pre-compact.json --compact
 eq "exit 0" 0 "$RC"
 eq "sem saída" "" "$OUT"
 run pre-compact.json --compact
-eq "entrada antiga e linha inválida descartadas" "2" "$(wc -l < "$HIST")"
+eq "entrada antiga e linha inválida descartadas" "2" "$(wc -l < "$HIST" | tr -d ' ')"
 eq "registro" '{"session_id":"sess-full-001","trigger":"auto"}' "$(head -1 "$HIST" | jq -c '{session_id, trigger}')"
 run full.json
 eq "snapshot conta 2 compacts" "2" "$(snap sess-full-001 .compacts)"
@@ -127,7 +127,12 @@ run no-limits.json
 eq "outra sessão continua com 0" "0" "$(snap sess-nolimits-002 .compacts)"
 run invalid.json --compact
 eq "--compact com JSON inválido: exit 0" 0 "$RC"
-eq "histórico intacto" "2" "$(wc -l < "$HIST")"
+eq "histórico intacto" "2" "$(wc -l < "$HIST" | tr -d ' ')"
+printf '5\n' >> "$HIST"
+run full.json
+eq "linha que não é objeto no histórico não derruba a statusline" "Opus 5.5 · ctx 42% · session 31% · weekly 12% · compacts 2" "$OUT"
+run pre-compact.json --compact
+eq "--compact descarta a linha que não é objeto" "3" "$(wc -l < "$HIST" | tr -d ' ')"
 
 echo "== --end (hook SessionEnd)"
 run session-end.json --end
@@ -139,9 +144,14 @@ run invalid.json --end
 eq "--end com JSON inválido: exit 0" 0 "$RC"
 
 echo "== desempenho (< 50 ms por chamada, média de 20)"
-start=$(date +%s%N)
+# date +%N não existe no macOS (BSD); lá o perl dá os milissegundos.
+now_ms() {
+  local n; n="$(date +%s%N)"
+  case "$n" in *N) perl -MTime::HiRes=time -e 'printf "%d\n", time() * 1000' ;; *) echo $((n / 1000000)) ;; esac
+}
+start=$(now_ms)
 for _ in $(seq 20); do "$BRIDGE" < "$FX/full.json" > /dev/null; done
-avg_ms=$(( ($(date +%s%N) - start) / 20 / 1000000 ))
+avg_ms=$(( ($(now_ms) - start) / 20 ))
 eq "média ${avg_ms} ms < 50 ms" "true" "$([ "$avg_ms" -lt 50 ] && echo true || echo false)"
 
 echo

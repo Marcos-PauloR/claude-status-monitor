@@ -44,7 +44,7 @@ case "${1:-}" in
     [ -f "$HIST" ] && old="$(cat "$HIST")"
     new="$(jq -nrc --arg old "$old" --argjson days "$HIST_DAYS" --argjson ev "$input" '
       (now | floor) as $now
-      | ($old | split("\n")[] | select(length > 0) | fromjson? | select(.ts >= $now - $days * 86400)),
+      | ($old | split("\n")[] | select(length > 0) | fromjson? | objects | select(.ts >= $now - $days * 86400)),
         ($ev | select(.session_id) | { ts: $now, session_id, trigger: (.trigger // null) })
       | tojson
     ')" || exit 0
@@ -83,7 +83,7 @@ out="$(jq -r --rawfile hist "$hist_file" '
                       + ($u.cache_read_input_tokens // 0)
                  else null end)
       },
-      compacts: ([ $hist | split("\n")[] | select(length > 0) | fromjson?
+      compacts: ([ $hist | split("\n")[] | select(length > 0) | fromjson? | objects
                    | select(.session_id == $sid) ] | length),
       limits: (if ($rl | type) == "object" and ($rl.five_hour or $rl.seven_day)
                then { five_hour: window($rl.five_hour), seven_day: window($rl.seven_day) }
