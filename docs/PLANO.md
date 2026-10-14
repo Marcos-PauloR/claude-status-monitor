@@ -11,6 +11,19 @@ Cada task fecha em si (dá pra parar entre elas). As estimativas de tokens são 
 | T5 | Preferências | `prefs.js` + `schemas/*.gschema.xml` (limiares, inatividade, formato) | baixo/médio | 60–100k |
 | T6 | Validação | roteiro dos critérios de aceite (SPEC §9) executado numa sessão aninhada do GNOME (`dbus-run-session gnome-shell --devkit` no GNOME 49+) | baixo | 40–80k |
 
+
+### v1.1 — outras plataformas
+
+A ponte já grava os snapshots em arquivos (contrato v1). Cada plataforma só precisa de um mostrador. Para não repetir a lógica do `store.js` três vezes, um **resumidor comum** em bash + jq calcula o que mostrar, e os mostradores só formatam.
+
+| # | Task | Entregável |
+|---|---|---|
+| T7 | Resumidor + portabilidade | `bridge/claude-status-summary.sh` (`--format json\|text`, mesmas regras de RF02/RF05/RF07/RF09); ponte, instalador e testes rodando com bash 3.2 e ferramentas BSD (macOS) |
+| T8 | waybar | `--format waybar` + módulo `custom/claude` (exemplo de config e CSS) com atualização por sinal |
+| T9 | macOS | `--format swiftbar` + plugin SwiftBar/xbar (barra + menu) |
+| T10 | KDE Plasma 6 | plasmoid nativo (QML) lendo `--format json`: texto no painel + popup com cotas e janelas |
+| T11 | Docs e instalação | `install.sh --target gnome\|waybar\|macos\|kde`, README por plataforma, validação |
+
 **Total estimado: ~350k a 650k tokens.** Usar Sonnet nas tasks T1, T2 e T5 tende a reduzir o custo. Opus faz mais sentido em T3/T4 (API do Shell, ciclo de vida da extensão).
 
 **MVP mais barato:** T1 + T2 + T3 (~170–320k). Esse conjunto já entrega o número no painel e a statusline no terminal. Menu e preferências podem vir depois.
