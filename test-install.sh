@@ -68,4 +68,67 @@ eq "exit != 0" 1 "$RC"
 eq "arquivo intacto" "{ quebrado" "$(cat "$S")"
 eq "sem backup" "0" "$(nbak)"
 
+echo "== alvos (--target), com comandos externos simulados"
+rm -rf "$HOME"; mkdir -p "$HOME"; unset XDG_DATA_HOME
+STUB="$TMP/stub"; LOG="$TMP/calls.log"; mkdir -p "$STUB"; : > "$LOG"
+stub() { # stub <comando> [código de saída]
+  printf '#!/usr/bin/env bash\necho "%s $*" >> "%s"\nexit %s\n' "$1" "$LOG" "${2:-0}" > "$STUB/$1"; chmod +x "$STUB/$1"
+}
+stub glib-compile-schemas; stub gnome-extensions
+export PATH="$STUB:$PATH"
+G="$HOME/.local/share/gnome-shell/extensions/claude-status@marcospaulo"
+
+inst --target gnome
+eq "gnome: exit 0" 0 "$RC"
+eq "gnome: compila o schema do repo" "glib-compile-schemas $HERE/extension/schemas" "$(grep '^glib' "$LOG")"
+eq "gnome: symlink para extension/" "$HERE/extension" "$(readlink "$G")"
+eq "gnome: ativa" "gnome-extensions enable claude-status@marcospaulo" "$(grep enable "$LOG")"
+eq "gnome: ponte também instalada" "true" "$([ -x "$B" ] && echo true || echo false)"
+inst --target gnome
+eq "gnome: reinstalar é idempotente" "true" "$(grep -q 'já aponta' <<<"$OUT" && [ "$RC" = 0 ] && echo true || echo false)"
+rm "$G"; mkdir -p "$G"
+inst --target gnome
+eq "gnome: pasta de outra origem não é sobrescrita" "1" "$RC"
+eq "gnome: pasta intacta" "true" "$([ -d "$G" ] && [ ! -L "$G" ] && echo true || echo false)"
+rmdir "$G"; inst --target gnome
+inst --uninstall --target gnome
+eq "gnome: desinstala (desativa e remove o symlink)" "true" "$(grep -q disable "$LOG" && [ ! -e "$G" ] && echo true || echo false)"
+eq "gnome: ponte removida junto" "false" "$([ -e "$B" ] && echo true || echo false)"
+
+inst --target waybar
+eq "waybar: módulo instalado" "true" "$([ -x "$HOME/.local/bin/claude-status-waybar.sh" ] && echo true || echo false)"
+eq "waybar: indica os trechos de config" "true" "$(grep -q 'waybar/config.jsonc' <<<"$OUT" && echo true || echo false)"
+inst --uninstall --target waybar
+eq "waybar: módulo removido" "false" "$([ -e "$HOME/.local/bin/claude-status-waybar.sh" ] && echo true || echo false)"
+
+P="$TMP/plugins"
+inst --target macos --plugin-dir "$P"
+eq "macos: plugin em --plugin-dir" "true" "$([ -x "$P/claude-status.5s.sh" ] && echo true || echo false)"
+printf '#!/bin/sh\necho outro\n' > "$P/claude-status.other.sh"
+mv "$P/claude-status.5s.sh" "$P/claude-status.1m.sh"
+inst --uninstall --target macos --plugin-dir "$P"
+eq "macos: remove o plugin mesmo renomeado, e só ele" "claude-status.other.sh" "$(ls "$P")"
+printf '#!/bin/sh\necho "~/SwiftBar"\n' > "$STUB/defaults"; chmod +x "$STUB/defaults"
+inst --target macos
+eq "macos: pasta do SwiftBar via defaults (com ~ expandido)" "true" "$([ -x "$HOME/SwiftBar/claude-status.5s.sh" ] && echo true || echo false)"
+rm "$STUB/defaults"
+if [ ! -d "$HOME/Library/Application Support/xbar/plugins" ] && ! command -v defaults >/dev/null; then
+  inst --target macos
+  eq "macos: sem pasta conhecida falha com instrução" "true" "$([ "$RC" = 1 ] && grep -q -- '--plugin-dir' <<<"$OUT" && echo true || echo false)"
+fi
+
+: > "$LOG"; stub kpackagetool6 1
+inst --target kde
+eq "kde: instala quando não existe" "true" "$(grep -q -- "-i $HERE/kde/org.claudestatus.monitor" "$LOG" && echo true || echo false)"
+stub kpackagetool6 0; : > "$LOG"
+inst --target kde
+eq "kde: atualiza quando já existe" "true" "$(grep -q -- "-u $HERE/kde/org.claudestatus.monitor" "$LOG" && echo true || echo false)"
+inst --uninstall --target kde
+eq "kde: remove" "true" "$(grep -q -- '-r org.claudestatus.monitor' "$LOG" && echo true || echo false)"
+
+inst --target waybar --target kde
+eq "vários alvos de uma vez" "true" "$([ "$RC" = 0 ] && [ -x "$HOME/.local/bin/claude-status-waybar.sh" ] && echo true || echo false)"
+inst --target nope
+eq "alvo inválido: exit 1" 1 "$RC"
+
 echo; echo "Resultado: $PASS ok, $FAIL falha(s)"; [ "$FAIL" -eq 0 ]

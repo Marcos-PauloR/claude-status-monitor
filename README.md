@@ -1,75 +1,82 @@
 # Claude Status Monitor
 
-Extensão do GNOME Shell que mostra na barra superior o **consumo do plano** (janelas de 5 h e semanal) e o **tamanho do contexto** das sessões do Claude Code. Não gasta tokens: os dados vêm da própria statusline do Claude Code.
+Mostra na barra do sistema o **consumo do plano** (cotas `session` de 5 h e `weekly`) e o **tamanho do contexto** de cada sessão do Claude Code. Funciona no GNOME, KDE Plasma, waybar e macOS. Não gasta tokens: os dados vêm da própria statusline do Claude Code.
 
 ```
 [ CPU ▂▄▆ ] [ MEM ▅ ] [ model · ctx · session · resets · compacts · weekly ]
                           └─ menu: cotas session/weekly, compacts da semana, uma entrada por janela com barra de ctx
 ```
 
-**Status:** v1 (GNOME) concluída; v1.1 (waybar, macOS, KDE) em andamento; ver [docs/STATUS.md](docs/STATUS.md).
+## Como funciona
+
+```
+Claude Code ──statusline/hooks──▶ ponte (bash + jq) ──▶ ~/.cache/claude-status/sessions/<id>.json
+                                                                   │
+                                   GNOME · KDE · waybar · macOS ◀──┘  (cada mostrador só lê os arquivos)
+```
+
+- A **ponte** (`bridge/claude-status-bridge.sh`) é chamada pelo Claude Code a cada mensagem, grava um snapshot por sessão e continua imprimindo a statusline no terminal.
+- O **resumidor** (`bridge/claude-status-summary.sh`) aplica as regras (janelas ativas, cota mais recente, cores, compacts da semana) para waybar, macOS e KDE. A extensão do GNOME tem a mesma lógica em JS.
+- Nenhum componente acessa a rede, lê credenciais ou chama modelos.
 
 ## Plataformas
 
-O projeto tem duas partes: a **ponte**, que grava os snapshots a partir da statusline do Claude Code, e um **mostrador** por plataforma, que lê esses arquivos. A ponte é a mesma em todo lugar.
-
 | Plataforma | Mostrador | Situação |
 |---|---|---|
-| Linux · GNOME Shell 50 | extensão (`extension/`): painel em colunas, menu e preferências | ✅ pronto |
-| Linux · waybar (Sway, Hyprland…) | módulo `custom/claude` (`waybar/`): texto colorido + tooltip com cotas e janelas | ✅ pronto |
-| macOS | plugin SwiftBar/xbar (`macos/`): título na barra de menus + menu com cotas e janelas | ✅ pronto (ainda não testado num Mac real) |
-| Linux · KDE Plasma 6 | plasmoid nativo (`kde/`): texto no painel + popup com cotas e janelas, configurável | ✅ pronto |
-| Qualquer terminal | a própria statusline do Claude Code (`Opus 5.5 · ctx 42% · session 31% · weekly 12%`) | ✅ pronto |
+| Linux · GNOME Shell 50 | extensão (`extension/`): painel em colunas, menu e preferências | ✅ validado em uso real |
+| Linux · KDE Plasma 6 | plasmoid nativo (`kde/`): texto no painel, popup com cotas e janelas, configurável | ✅ validado no `plasmoidviewer` |
+| Linux · waybar (Sway, Hyprland…) | módulo `custom/claude` (`waybar/`): texto colorido e tooltip com cotas e janelas | ✅ validado com sway + waybar |
+| macOS | plugin SwiftBar/xbar (`macos/`): título na barra de menus e menu com cotas e janelas | ✅ pronto, ainda não testado num Mac real |
+| Qualquer terminal | a própria statusline do Claude Code: `Opus 5.5 · ctx 42% · session 31% · weekly 12%` | ✅ |
 
-Requisitos comuns: `bash` (3.2+) e `jq` (1.6+). No Windows, a ponte roda via WSL ou Git Bash, mas ainda não há mostrador para a bandeja do sistema.
+No Windows a ponte roda via WSL ou Git Bash, mas ainda não há mostrador para a bandeja do sistema.
 
 ## Instalação
 
-Requisitos (GNOME): GNOME Shell 50, `jq`, Claude Code 2.1.x.
+Requisitos: Claude Code 2.1.x, `bash` 3.2+ e `jq` 1.6+ (macOS: `brew install jq`).
 
 ```bash
-./install.sh                      # ponte statusline + hooks em ~/.claude/settings.json (com backup)
-glib-compile-schemas extension/schemas
-ln -s "$PWD/extension" ~/.local/share/gnome-shell/extensions/claude-status@marcospaulo
-gnome-extensions enable claude-status@marcospaulo   # no Wayland, sair e entrar na sessão
+git clone <este repositório> && cd claude-status-monitor
+./install.sh --target gnome      # ou: kde | waybar | macos (pode repetir --target)
 ```
 
-Desinstalar: `gnome-extensions disable claude-status@marcospaulo`, remover o symlink e `./install.sh --uninstall`.
+O instalador sempre copia a ponte e o resumidor para `~/.local/bin` e registra `statusLine` e os hooks `PreCompact`/`SessionEnd` em `~/.claude/settings.json`, com backup antes de alterar. Rodar de novo é seguro (idempotente). Sem `--target`, instala só a ponte (statusline no terminal).
 
-### waybar
+| Alvo | O que faz | Depois |
+|---|---|---|
+| `gnome` | compila o schema, cria o symlink em `~/.local/share/gnome-shell/extensions/` e ativa | no Wayland, sair e entrar na sessão |
+| `kde` | instala ou atualiza o plasmoid com `kpackagetool6` | botão direito no painel → *Adicionar widgets* → **Claude Status Monitor** |
+| `waybar` | copia `claude-status-waybar.sh` para `~/.local/bin` | colar `waybar/config.jsonc` e `waybar/style.css` na config do waybar; `inotify-tools` deixa a atualização instantânea |
+| `macos` | copia o plugin para a pasta do SwiftBar ou do xbar (`--plugin-dir DIR` para escolher) | instalar antes o app: `brew install --cask swiftbar` (ou `xbar`) |
 
-```bash
-./install.sh                                        # ponte + resumidor em ~/.local/bin
-install -m 755 waybar/claude-status-waybar.sh ~/.local/bin/
-```
+Abra uma nova sessão do Claude Code para a statusline começar a gravar os snapshots.
 
-Depois cole `waybar/config.jsonc` na config do waybar (e `"custom/claude"` em `modules-right`) e `waybar/style.css` no `style.css`. Com `inotify-tools` instalado a barra atualiza na hora; sem ele, a cada 5 s.
+**Desinstalar:** `./install.sh --uninstall --target <alvo>` remove o mostrador, a ponte e as entradas do `settings.json` (com backup).
 
-### macOS (SwiftBar ou xbar)
+## Configuração
 
-```bash
-brew install jq
-brew install --cask swiftbar                        # ou: brew install --cask xbar
-./install.sh                                        # ponte + resumidor em ~/.local/bin
-cp macos/claude-status.5s.sh "<pasta de plugins do SwiftBar/xbar>/"
-```
-
-O `5s` do nome é o intervalo de atualização (renomeie para `10s`, `1m`… se quiser). Os dados ficam em `~/.cache/claude-status`, como no Linux.
-
-### KDE Plasma 6
-
-```bash
-./install.sh                                        # ponte + resumidor em ~/.local/bin
-kpackagetool6 -t Plasma/Applet -i kde/org.claudestatus.monitor   # atualizar: -u no lugar de -i
-```
-
-Depois: botão direito no painel → *Adicionar widgets* → **Claude Status Monitor**. Limiares, inatividade e intervalo ficam em *Configurar Claude Status Monitor*.
+- **GNOME:** menu → *Preferences* (limiares de cor, inatividade, campos e posição no painel).
+- **KDE:** *Configurar Claude Status Monitor* (limiares, inatividade e intervalo).
+- **waybar e macOS:** argumentos do resumidor, `--warn 70 --crit 90 --inactive 15`, no `exec` do waybar ou em `ARGS` no plugin. Também valem as variáveis `CLAUDE_STATUS_WARN`, `CLAUDE_STATUS_CRIT` e `CLAUDE_STATUS_INACTIVE_MINUTES`.
 
 ## Desenvolvimento
 
-- Ponte: `bridge/test.sh` · resumidor: `bridge/test-summary.sh` · instalador: `./test-install.sh` · extensão: `gjs -m extension/test.js` · waybar: `waybar/test.sh` · macOS: `macos/test.sh` · KDE: `gjs -m kde/test.js`
-- Ao mudar o schema (`extension/schemas/*.gschema.xml`), recompilar: `glib-compile-schemas extension/schemas`
-- A UI da extensão (painel, menu, preferências) é toda em inglês.
+| Parte | Testes |
+|---|---|
+| Ponte | `bridge/test.sh` |
+| Resumidor | `bridge/test-summary.sh` |
+| Instalador | `./test-install.sh` |
+| GNOME | `gjs -m extension/test.js` |
+| KDE | `gjs -m kde/test.js` |
+| waybar | `waybar/test.sh` |
+| macOS | `macos/test.sh` |
 
-- [Especificação](docs/SPEC.md): objetivo, fonte de dados, arquitetura, contrato e requisitos
-- [Plano e estimativa de tokens](docs/PLANO.md): tasks, custo estimado e riscos
+- Os scripts precisam rodar no bash 3.2 do macOS: evite `mapfile`, arrays associativos e opções só do GNU (`stat -c`, `date +%N`, `sed -i` sem sufixo).
+- Ao mudar o schema do GNOME (`extension/schemas/*.gschema.xml`): `glib-compile-schemas extension/schemas`.
+- Toda a UI dos mostradores é em inglês.
+
+## Documentos
+
+- [Especificação](docs/SPEC.md): objetivo, fonte de dados, arquitetura, contrato do snapshot e requisitos
+- [Plano](docs/PLANO.md): tasks, estimativa de tokens e riscos
+- [Status](docs/STATUS.md): andamento e resultados das validações

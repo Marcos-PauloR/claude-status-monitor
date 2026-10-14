@@ -67,6 +67,18 @@ Os componentes ficam desacoplados por arquivos. A extensão não chama rede, nã
 - Atualização via `Gio.FileMonitor` no diretório de sessões. Há um fallback por timer de 30 s, que também serve pra expirar sessões inativas.
 - `prefs.js` (Adw): limiares de cor, formato do rótulo, minutos até considerar uma sessão inativa e posição no painel.
 
+### 4.3 Outras plataformas (v1.1)
+
+Os mostradores fora do GNOME não repetem a lógica do `store.js`: usam o **resumidor** `bridge/claude-status-summary.sh` (bash 3.2+ e jq), que aplica RF02, RF05, RF07 e RF09 sobre os mesmos arquivos e imprime em `text`, `json`, `waybar` ou `swiftbar`. Limiares e inatividade vêm de `--warn/--crit/--inactive` ou das variáveis `CLAUDE_STATUS_*`.
+
+| Plataforma | Mostrador | Atualização |
+|---|---|---|
+| waybar | `waybar/claude-status-waybar.sh` (módulo contínuo, `return-type: json`) | `inotifywait` no diretório; sem ele, consulta a cada 5 s; reimprime a cada 30 s |
+| macOS | `macos/claude-status.5s.sh` (SwiftBar/xbar) | intervalo do nome do arquivo (5 s) |
+| KDE Plasma 6 | plasmoid `kde/org.claudestatus.monitor` (QML, motor `executable`) | intervalo configurável (5 s) |
+
+A instalação de cada um é `./install.sh --target gnome|kde|waybar|macos`.
+
 ## 5. Contrato do snapshot (v1)
 
 ```json
@@ -133,7 +145,8 @@ Toda a UI (painel, menu e preferências) fica em inglês.
 
 - Histórico/gráfico de consumo ao longo do tempo (candidato à v2: guardar série em `history.jsonl`).
 - Notificação desktop ao cruzar limiar (candidato à v2, é barato).
-- Suporte a outros desktops (KDE, waybar).
+- Suporte a outros desktops: entregue na v1.1 (§4.3).
+- Mostrador para Windows (bandeja do sistema).
 
 ## 9. Critérios de aceite
 

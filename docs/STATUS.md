@@ -15,7 +15,7 @@ Atualizado em 2026-10-14.
 | T8 waybar | ✅ pronta — `waybar/test.sh` (9 ok; 16 com inotify), resumidor 46 ok; validada com sway 1.11 + waybar 0.15 headless em container (barra, cores e atualização ao vivo; tooltip não renderizado no headless) |
 | T9 macOS (SwiftBar/xbar) | ✅ pronta — `macos/test.sh` (10 ok, simulando o PATH mínimo do SwiftBar), resumidor 63 ok; todas as suítes ok no bash 3.2; **falta validar num Mac real** |
 | T10 KDE Plasma 6 (plasmoid) | ✅ pronta — `gjs -m kde/test.js` (19 ok); carregado no `plasmoidviewer` do Plasma 6.7.5 (container, sway headless): painel e popup ok, sem erros de QML; **tela de configuração não exercitada** |
-| T11 Docs e instalação por plataforma | ⏳ próxima |
+| T11 Docs e instalação por plataforma | ✅ pronta — `install.sh --target gnome\|kde\|waybar\|macos` (instalador 54 ok, com comandos externos simulados; `--target gnome` rodado de verdade aqui, idempotente); README reescrito; SPEC §4.3 |
 
 ## Instalação atual da extensão
 
@@ -51,9 +51,7 @@ Atualizado em 2026-10-14.
 ## Desfazer
 
 ```
-gnome-extensions disable claude-status@marcospaulo
-rm ~/.local/share/gnome-shell/extensions/claude-status@marcospaulo
-./install.sh --uninstall   # remove a ponte e as entradas do settings.json
+./install.sh --uninstall --target gnome   # desativa e remove a extensão, a ponte e as entradas do settings.json
 ```
 
 ## Retomar a conversa
