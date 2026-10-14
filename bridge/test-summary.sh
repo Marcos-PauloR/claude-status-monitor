@@ -155,6 +155,38 @@ reset
 snap a 1 '.context.used_pct = null'
 eq "sem dados: percentage 0" '[0,"normal"]' "$("$SUMMARY" --format waybar | jq -c '[.percentage, .class]')"
 
+echo "== --format swiftbar (T9)"
+sb() { "$SUMMARY" --format swiftbar; }
+reset
+eq "vazio: título" "✳ Claude —" "$(sb | head -1)"
+eq "vazio: menu" "no active windows" "$(sb | sed -n 3p)"
+reset
+snap a 10 '.project = "proj|x" | .session_name = "--sub" | .context = {used_pct: 75, window: 1000000, tokens: 750000} | .compacts = 3 | '"$(limits 31 92)"
+snap b 60 '.model = "Sonnet 5.5"'
+printf '{"ts":%d}\n' $((NOW - 60)) > "$BASE/compacts.jsonl"
+out="$(sb)"
+eq "título curto com cor crítica" "✳ ctx 75% · session 31% · weekly 92% | color=#d63c25" "$(sed -n 1p <<<"$out")"
+eq "separador" "---" "$(sed -n 2p <<<"$out")"
+eq "cota session" "session  ███░░░░░░░  31%  resets in 1h12 | font=Menlo size=12" "$(sed -n 3p <<<"$out")"
+eq "cota weekly com cor" "weekly   █████████░  92%  resets in 3d0h | font=Menlo size=12 color=#d63c25" "$(sed -n 4p <<<"$out")"
+eq "compacts da semana" "compacts this week: 1" "$(sed -n 5p <<<"$out")"
+eq "título da janela escapa | e --" "proj¦x — ‐-sub | size=13" "$(grep -m1 'proj' <<<"$out")"
+eq "ctx da janela" "ctx  ███████▌░░  75%  750k / 1M | font=Menlo size=12 color=#b8860b" "$(grep -m1 '^ctx  ███████' <<<"$out")"
+eq "segunda janela" "true" "$(grep -q '^Sonnet 5.5 · compacts 0 | size=11 color=#888888$' <<<"$out" && echo true || echo false)"
+eq "abrir pasta" "Open data folder | bash=/usr/bin/open param1=$BASE terminal=false" "$(grep '^Open data folder' <<<"$out")"
+eq "atualizar" "Refresh | refresh=true" "$(tail -1 <<<"$out")"
+eq "nenhuma linha de conteúdo começa com --" "0" "$(grep -c '^--[^-]' <<<"$out")"
+eq "SwiftBar: cor clara/escura" "✳ ctx 75% · session 31% · weekly 92% | color=#d63c25,#ff7b63" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | head -1)"
+reset
+snap a 10 "$(limits 10 10)"
+eq "título normal sem cor" "✳ ctx 10% · session 10% · weekly 10%" "$(sb | head -1)"
+reset
+snap a 10 "$(limits 80 30 -1)"
+eq "reset passado" "session  ░░░░░░░░░░  0%  just reset | font=Menlo size=12" "$(sb | sed -n 3p)"
+reset
+snap a 10
+eq "sem limits" "session  no data yet" "$(sb | sed -n 3p)"
+
 echo "== robustez"
 reset
 snap a 10

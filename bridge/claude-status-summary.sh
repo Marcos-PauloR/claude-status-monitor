@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Status Monitor — resumidor dos snapshots para os mostradores sem GNOME.
 #
-# Uso: claude-status-summary.sh [--format text|json|waybar] [--warn N] [--crit N] [--inactive MIN]
+# Uso: claude-status-summary.sh [--format text|json|waybar|swiftbar] [--warn N] [--crit N] [--inactive MIN]
 #
 # Lê ${XDG_CACHE_HOME:-~/.cache}/claude-status/{sessions/*.json,compacts.jsonl} e aplica
 # as mesmas regras do painel do GNOME (extension/store.js): janelas ativas (RF05), cota do
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-case "$format" in json|text|waybar) ;; *) die "formato desconhecido: $format" ;; esac
+case "$format" in json|text|waybar|swiftbar) ;; *) die "formato desconhecido: $format" ;; esac
 for n in "$warn" "$crit" "$inactive"; do
   case "$n" in ''|*[!0-9]*) die "número inválido: $n" ;; esac
 done
@@ -46,6 +46,8 @@ hist="$BASE/compacts.jsonl"
 exec jq -nrR \
   --rawfile hist "$hist" \
   --arg format "$format" \
+  --arg base "$BASE" \
+  --arg swiftbar "${SWIFTBAR:-}" \
   --argjson now "${CLAUDE_STATUS_NOW:-$(date +%s)}" \
   --argjson warn "$warn" --argjson crit "$crit" --argjson inactive "$inactive" '
   def num: if type == "number" then . else null end;
@@ -70,10 +72,19 @@ exec jq -nrR \
   # Pango (tooltip do waybar).
   def esc: tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
   def color: ["#78aeed", "#f6d32d", "#ff7b63"][level];
-  # Barra de 10 posições com meio bloco: 75 -> ███████▌░░.
-  def bar: ((. // 0) | if . < 0 then 0 elif . > 100 then 100 else . end) as $p
+  # Barra de 10 posições com meio bloco: 75 -> ["███████▌", "░░"].
+  def blocks: ((. // 0) | if . < 0 then 0 elif . > 100 then 100 else . end) as $p
     | ($p / 10 | floor) as $full | (if $p / 10 - $full >= 0.5 then 1 else 0 end) as $half
-    | "<span color=\"\($p | color)\">\("█" * $full // "")\(if $half == 1 then "▌" else "" end)</span>\("░" * (10 - $full - $half) // "")";
+    | [ "\("█" * $full // "")\(if $half == 1 then "▌" else "" end)", "░" * (10 - $full - $half) // "" ];
+  def bar: blocks as $b | "<span color=\"\(. // 0 | color)\">\($b[0])</span>\($b[1])";
+  # SwiftBar/xbar: "|" separa parâmetros e "-" no início da linha vira submenu.
+  def sbesc: tostring | gsub("\\|"; "¦") | sub("^-"; "‐");
+  # Cores legíveis em barra clara; o SwiftBar aceita o par "clara,escura".
+  def sbcolor: [null, ["#b8860b", "#f6d32d"], ["#d63c25", "#ff7b63"]][level]
+    | if . == null then "" elif $swiftbar != "" then " color=\(.[0]),\(.[1])" else " color=\(.[0])" end;
+  def sbquota($title): ($title + "         " | .[0:9]) as $t
+    | if . == null then "\($title)  no data yet"
+      else "\($t)\(.pct | blocks | add)  \(.pct)%  \(if .reset then "just reset" else "resets in \(.resets_in | dur)" end) | font=Menlo size=12\(.pct | sbcolor)" end;
   def pct: if . == null then "—" else "\(.)%" end;
   def quota_line($title): if . == null then "<b>\($title)</b>  no data yet"
       else "<b>\($title)</b>  <tt>\(.pct | bar)</tt>  \(.pct)%  \(if .reset then "just reset" else "resets in \(.resets_in | dur)" end)" end;
@@ -135,6 +146,24 @@ exec jq -nrR \
           percentage: ([ $s.ctx, $s.session.pct, $s.weekly.pct ] | map(num // 0) | max)
         } end
       | tojson
+    elif $format == "swiftbar" then
+      ([ "---", "Open data folder | bash=/usr/bin/open param1=\($base) terminal=false", "Refresh | refresh=true" ]) as $footer
+      | if $s.empty then [ "✳ Claude —", "---", "no active windows" ] + $footer | join("\n")
+        else [ ("✳ " + ([ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
+                          (if $s.session != null then "session \($s.session.pct)%" else empty end),
+                          (if $s.weekly != null then "weekly \($s.weekly.pct)%" else empty end)
+                        ] | if length == 0 then $s.model else join(" · ") end)
+                  + ($s.level as $l | if $l == 0 then "" else " |" + ([0, $warn, $crit][$l] | sbcolor) end)),
+               "---",
+               ($s.session | sbquota("session")),
+               ($s.weekly | sbquota("weekly")),
+               "compacts this week: \($s.week_compacts)",
+               ($s.windows[] | "---",
+                 "\([.project // "(no project)", .name] | map(select(. != null) | sbesc) | join(" — ")) | size=13",
+                 "\(.model // "—" | sbesc) · compacts \(.compacts) | size=11 color=#888888",
+                 "ctx  \(.ctx | blocks | add)  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens) | font=Menlo size=12\(.ctx | sbcolor)")
+             ] + $footer | join("\n")
+        end
     elif $s.empty then "Claude —"
     else [ $s.model,
            (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
