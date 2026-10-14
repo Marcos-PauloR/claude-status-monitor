@@ -16,7 +16,7 @@ O projeto tem duas partes: a **ponte**, que grava os snapshots a partir da statu
 | Plataforma | Mostrador | Situação |
 |---|---|---|
 | Linux · GNOME Shell 50 | extensão (`extension/`): painel em colunas, menu e preferências | ✅ pronto |
-| Linux · waybar (Sway, Hyprland…) | módulo `custom/claude` | 🚧 planejado (T8) |
+| Linux · waybar (Sway, Hyprland…) | módulo `custom/claude` (`waybar/`): texto colorido + tooltip com cotas e janelas | ✅ pronto |
 | macOS | plugin SwiftBar/xbar | 🚧 planejado (T9) |
 | Linux · KDE Plasma 6 | plasmoid nativo | 🚧 planejado (T10) |
 | Qualquer terminal | a própria statusline do Claude Code (`Opus 5.5 · ctx 42% · session 31% · weekly 12%`) | ✅ pronto |
@@ -36,9 +36,18 @@ gnome-extensions enable claude-status@marcospaulo   # no Wayland, sair e entrar 
 
 Desinstalar: `gnome-extensions disable claude-status@marcospaulo`, remover o symlink e `./install.sh --uninstall`.
 
+### waybar
+
+```bash
+./install.sh                                        # ponte + resumidor em ~/.local/bin
+install -m 755 waybar/claude-status-waybar.sh ~/.local/bin/
+```
+
+Depois cole `waybar/config.jsonc` na config do waybar (e `"custom/claude"` em `modules-right`) e `waybar/style.css` no `style.css`. Com `inotify-tools` instalado a barra atualiza na hora; sem ele, a cada 5 s.
+
 ## Desenvolvimento
 
-- Ponte: `bridge/test.sh` · instalador: `./test-install.sh` · extensão: `gjs -m extension/test.js`
+- Ponte: `bridge/test.sh` · resumidor: `bridge/test-summary.sh` · instalador: `./test-install.sh` · extensão: `gjs -m extension/test.js` · waybar: `waybar/test.sh`
 - Ao mudar o schema (`extension/schemas/*.gschema.xml`), recompilar: `glib-compile-schemas extension/schemas`
 - A UI da extensão (painel, menu, preferências) é toda em inglês.
 

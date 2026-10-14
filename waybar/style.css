@@ -1,0 +1,16 @@
+/* Trecho para ~/.config/waybar/style.css — mesmas cores do painel do GNOME. */
+#custom-claude {
+    padding: 0 8px;
+}
+
+#custom-claude.warn {
+    color: #f6d32d;
+}
+
+#custom-claude.crit {
+    color: #ff7b63;
+}
+
+#custom-claude.empty {
+    opacity: 0.6;
+}

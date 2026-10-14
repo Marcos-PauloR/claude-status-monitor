@@ -1,0 +1,11 @@
+// Trecho para ~/.config/waybar/config.jsonc
+// 1. Acrescente "custom/claude" em "modules-right" (ou left/center).
+// 2. Cole o bloco abaixo no objeto principal.
+"custom/claude": {
+    "exec": "~/.local/bin/claude-status-waybar.sh",
+    "return-type": "json",
+    "restart-interval": 5,
+    "format": "✳ {}",
+    "tooltip": true,
+    "on-click": "xdg-open ~/.cache/claude-status"
+}

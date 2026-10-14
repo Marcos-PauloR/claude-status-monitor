@@ -12,8 +12,8 @@ Atualizado em 2026-10-14.
 | T6 Validação final (SPEC §9) | 🟡 automática ok; faltam 2 checagens visuais (abaixo) |
 | **v1.1** | |
 | T7 Resumidor + portabilidade (macOS) | ✅ pronta — `bridge/test-summary.sh` (31 ok); ponte 62 ok e instalador 32 ok também no **bash 3.2** (imagem `bash:3.2`, mesma versão do macOS) |
-| T8 waybar | ⏳ próxima |
-| T9 macOS (SwiftBar/xbar) | — |
+| T8 waybar | ✅ pronta — `waybar/test.sh` (9 ok; 16 com inotify), resumidor 46 ok; validada com sway 1.11 + waybar 0.15 headless em container (barra, cores e atualização ao vivo; tooltip não renderizado no headless) |
+| T9 macOS (SwiftBar/xbar) | ⏳ próxima |
 | T10 KDE Plasma 6 (plasmoid) | — |
 | T11 Docs e instalação por plataforma | — |
 

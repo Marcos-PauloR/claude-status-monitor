@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Claude Status Monitor — resumidor dos snapshots para os mostradores sem GNOME.
 #
-# Uso: claude-status-summary.sh [--format json|text] [--warn N] [--crit N] [--inactive MIN]
+# Uso: claude-status-summary.sh [--format text|json|waybar] [--warn N] [--crit N] [--inactive MIN]
 #
 # Lê ${XDG_CACHE_HOME:-~/.cache}/claude-status/{sessions/*.json,compacts.jsonl} e aplica
 # as mesmas regras do painel do GNOME (extension/store.js): janelas ativas (RF05), cota do
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-case "$format" in json|text) ;; *) die "formato desconhecido: $format" ;; esac
+case "$format" in json|text|waybar) ;; *) die "formato desconhecido: $format" ;; esac
 for n in "$warn" "$crit" "$inactive"; do
   case "$n" in ''|*[!0-9]*) die "número inválido: $n" ;; esac
 done
@@ -62,6 +62,21 @@ exec jq -nrR \
         elif $h < 24 then "\($h)h\($m % 60 | tostring | if length < 2 then "0" + . else . end)"
         else "\($h / 24 | floor)d\($h % 24)h" end
     end;
+  # "900", "55k", "1M", "1.5M".
+  def tokens: if num == null then "—"
+      elif . >= 1000000 then "\(. / 100000 | round / 10)M"
+      elif . >= 1000 then "\(. / 1000 | round)k"
+      else tostring end;
+  # Pango (tooltip do waybar).
+  def esc: tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  def color: ["#78aeed", "#f6d32d", "#ff7b63"][level];
+  # Barra de 10 posições com meio bloco: 75 -> ███████▌░░.
+  def bar: ((. // 0) | if . < 0 then 0 elif . > 100 then 100 else . end) as $p
+    | ($p / 10 | floor) as $full | (if $p / 10 - $full >= 0.5 then 1 else 0 end) as $half
+    | "<span color=\"\($p | color)\">\("█" * $full // "")\(if $half == 1 then "▌" else "" end)</span>\("░" * (10 - $full - $half) // "")";
+  def pct: if . == null then "—" else "\(.)%" end;
+  def quota_line($title): if . == null then "<b>\($title)</b>  no data yet"
+      else "<b>\($title)</b>  <tt>\(.pct | bar)</tt>  \(.pct)%  \(if .reset then "just reset" else "resets in \(.resets_in | dur)" end)" end;
   def week_start($limits): ($limits.seven_day.resets_at | num) as $r
     | if $r == null then $now - 604800 elif $r <= $now then $r else $r - 604800 end;
 
@@ -99,6 +114,27 @@ exec jq -nrR \
          } ]
        } end) as $s
   | if $format == "json" then $s | tojson
+    elif $format == "waybar" then
+      (["normal", "warn", "crit"][$s.level]) as $class
+      | if $s.empty then { text: "Claude —", tooltip: "no active windows", class: "empty", alt: "empty", percentage: 0 }
+        else {
+          text: ([ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
+                   (if $s.session != null then "session \($s.session.pct)%", "resets \($s.session.resets_in | dur)" else empty end),
+                   (if $s.weekly != null then "weekly \($s.weekly.pct)%" else empty end)
+                 ] | if length == 0 then $s.model else join(" · ") end),
+          tooltip: ([ ($s.session | quota_line("session")),
+                      ($s.weekly | quota_line("weekly")),
+                      "compacts this week: \($s.week_compacts)",
+                      ($s.windows[] | "",
+                        "<b>\([.project // "(no project)", .name] | map(select(. != null)) | join(" — ") | esc)</b>",
+                        "\(.model // "—" | esc) · compacts \(.compacts)",
+                        "ctx  <tt>\(.ctx | bar)</tt>  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens)")
+                    ] | join("\n")),
+          class: $class,
+          alt: $class,
+          percentage: ([ $s.ctx, $s.session.pct, $s.weekly.pct ] | map(num // 0) | max)
+        } end
+      | tojson
     elif $s.empty then "Claude —"
     else [ $s.model,
            (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),

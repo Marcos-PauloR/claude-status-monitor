@@ -125,6 +125,36 @@ reset
 snap a 10
 eq "sem compacts.jsonl: 0" 0 "$(json .week_compacts)"
 
+echo "== --format waybar (T8)"
+wb() { "$SUMMARY" --format waybar | jq -r "$1"; }
+reset
+eq "vazio: texto e classe" '["Claude —","empty","no active windows",0]' "$("$SUMMARY" --format waybar | jq -c '[.text, .class, .tooltip, .percentage]')"
+reset
+snap a 10 '.project = "my-app & Co" | .session_name = "<core>" | .context = {used_pct: 75, window: 1000000, tokens: 750000} | .compacts = 3 | '"$(limits 31 92)"
+snap b 60 '.model = "Sonnet 5.5"'
+printf '{"ts":%d}\n' $((NOW - 60)) > "$BASE/compacts.jsonl"
+eq "texto" "ctx 75% · session 31% · resets 1h12 · weekly 92%" "$(wb .text)"
+eq "classe = pior nível" "crit" "$(wb .class)"
+eq "alt = classe" "crit" "$(wb .alt)"
+eq "percentage = pior indicador" 92 "$(wb .percentage)"
+tip="$(wb .tooltip)"
+eq "tooltip: cota session" "true" "$(grep -q 'session.*31%.*resets in 1h12' <<<"$tip" && echo true || echo false)"
+eq "tooltip: compacts da semana" "true" "$(grep -q 'compacts this week: 1' <<<"$tip" && echo true || echo false)"
+eq "tooltip: janela com Pango escapado" "true" "$(grep -qF 'my-app &amp; Co — &lt;core&gt;' <<<"$tip" && echo true || echo false)"
+eq "tooltip: ctx com tokens" "true" "$(grep -q '75%.*750k / 1M' <<<"$tip" && echo true || echo false)"
+eq "tooltip: segunda janela" "true" "$(grep -q 'Sonnet 5.5 · compacts 0' <<<"$tip" && echo true || echo false)"
+eq "tooltip: barra de 10 posições" "true" "$(grep -q '███████▌</span>░░' <<<"$tip" && echo true || echo false)"
+if command -v python3 >/dev/null; then
+  eq "tooltip é Pango válido (xml)" "true" "$(printf '<r>%s</r>' "$tip" | python3 -c 'import sys,xml.dom.minidom as m; m.parseString(sys.stdin.read())' 2>/dev/null && echo true || echo false)"
+fi
+reset
+snap a 10 "$(limits 80 30 -1)"
+eq "reset passado no tooltip" "true" "$(wb .tooltip | grep -q 'session.*0%.*just reset' && echo true || echo false)"
+eq "classe normal" "normal" "$(wb .class)"
+reset
+snap a 1 '.context.used_pct = null'
+eq "sem dados: percentage 0" '[0,"normal"]' "$("$SUMMARY" --format waybar | jq -c '[.percentage, .class]')"
+
 echo "== robustez"
 reset
 snap a 10
