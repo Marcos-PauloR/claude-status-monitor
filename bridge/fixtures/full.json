@@ -1,0 +1,27 @@
+{
+  "cwd": "/home/user/my-app/core",
+  "session_id": "sess-full-001",
+  "session_name": "core backend",
+  "transcript_path": "/tmp/t.jsonl",
+  "model": { "id": "claude-opus-5-5", "display_name": "Opus 5.5" },
+  "workspace": { "current_dir": "/home/user/my-app/core", "project_dir": "/home/user/my-app" },
+  "version": "2.1.284",
+  "cost": { "total_cost_usd": 1.2345, "total_duration_ms": 45000 },
+  "context_window": {
+    "total_input_tokens": 90000,
+    "total_output_tokens": 3000,
+    "context_window_size": 200000,
+    "used_percentage": 42,
+    "remaining_percentage": 58,
+    "current_usage": {
+      "input_tokens": 4000,
+      "output_tokens": 1200,
+      "cache_creation_input_tokens": 10000,
+      "cache_read_input_tokens": 70000
+    }
+  },
+  "rate_limits": {
+    "five_hour": { "used_percentage": 31.4, "resets_at": 1760460000 },
+    "seven_day": { "used_percentage": 11.6, "resets_at": 1760900000 }
+  }
+}

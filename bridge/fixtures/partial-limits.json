@@ -1,0 +1,9 @@
+{
+  "session_id": "sess-partial-004",
+  "session_name": "only five hour",
+  "model": { "display_name": "Opus 5.5" },
+  "workspace": { "project_dir": "/home/user/my-app/" },
+  "context_window": { "context_window_size": 200000, "used_percentage": 90.6,
+    "current_usage": { "input_tokens": 181000, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0 } },
+  "rate_limits": { "five_hour": { "used_percentage": 99.5, "resets_at": 1760460000 } }
+}

@@ -1,0 +1,10 @@
+{
+  "uuid": "claude-status@marcospaulo",
+  "name": "Claude Status Monitor",
+  "description": "Shows the context and plan usage of your Claude Code sessions in the top panel, from the snapshots written by the statusline bridge. No network access, no credentials.",
+  "shell-version": [
+    "50"
+  ],
+  "version": 1,
+  "settings-schema": "org.gnome.shell.extensions.claude-status"
+}

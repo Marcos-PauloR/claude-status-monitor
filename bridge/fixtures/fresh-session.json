@@ -1,0 +1,11 @@
+{
+  "session_id": "sess-fresh-003",
+  "model": { "id": "claude-opus-5-5", "display_name": "Opus 5.5" },
+  "workspace": { "current_dir": "/home/user/fresh", "project_dir": "/home/user/fresh" },
+  "context_window": {
+    "context_window_size": 1000000,
+    "used_percentage": null,
+    "remaining_percentage": null,
+    "current_usage": null
+  }
+}

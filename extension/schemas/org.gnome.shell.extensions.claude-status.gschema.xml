@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <enum id="org.gnome.shell.extensions.claude-status.panel-box">
+    <value nick="left" value="0"/>
+    <value nick="center" value="1"/>
+    <value nick="right" value="2"/>
+  </enum>
+
+  <schema id="org.gnome.shell.extensions.claude-status" path="/org/gnome/shell/extensions/claude-status/">
+    <key name="warn-threshold" type="i">
+      <range min="1" max="100"/>
+      <default>70</default>
+      <summary>Warning threshold (%)</summary>
+      <description>From this percentage on, the indicator turns yellow.</description>
+    </key>
+    <key name="crit-threshold" type="i">
+      <range min="1" max="100"/>
+      <default>90</default>
+      <summary>Critical threshold (%)</summary>
+      <description>From this percentage on, the indicator turns red.</description>
+    </key>
+    <key name="inactive-minutes" type="i">
+      <range min="1" max="1440"/>
+      <default>15</default>
+      <summary>Minutes until a window is inactive</summary>
+      <description>Windows without updates for this long disappear from the panel and the menu.</description>
+    </key>
+    <key name="panel-fields" type="as">
+      <default>['model', 'ctx', 'session', 'resets', 'compacts', 'weekly']</default>
+      <summary>Fields shown in the panel</summary>
+    </key>
+    <key name="panel-box" enum="org.gnome.shell.extensions.claude-status.panel-box">
+      <default>'right'</default>
+      <summary>Panel area</summary>
+    </key>
+    <key name="panel-index" type="i">
+      <range min="0" max="20"/>
+      <default>1</default>
+      <summary>Position inside the panel area</summary>
+    </key>
+  </schema>
+</schemalist>
