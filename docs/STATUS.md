@@ -14,8 +14,8 @@ Atualizado em 2026-10-14.
 | T7 Resumidor + portabilidade (macOS) | ✅ pronta — `bridge/test-summary.sh` (31 ok); ponte 62 ok e instalador 32 ok também no **bash 3.2** (imagem `bash:3.2`, mesma versão do macOS) |
 | T8 waybar | ✅ pronta — `waybar/test.sh` (9 ok; 16 com inotify), resumidor 46 ok; validada com sway 1.11 + waybar 0.15 headless em container (barra, cores e atualização ao vivo; tooltip não renderizado no headless) |
 | T9 macOS (SwiftBar/xbar) | ✅ pronta — `macos/test.sh` (10 ok, simulando o PATH mínimo do SwiftBar), resumidor 63 ok; todas as suítes ok no bash 3.2; **falta validar num Mac real** |
-| T10 KDE Plasma 6 (plasmoid) | ⏳ próxima |
-| T11 Docs e instalação por plataforma | — |
+| T10 KDE Plasma 6 (plasmoid) | ✅ pronta — `gjs -m kde/test.js` (19 ok); carregado no `plasmoidviewer` do Plasma 6.7.5 (container, sway headless): painel e popup ok, sem erros de QML; **tela de configuração não exercitada** |
+| T11 Docs e instalação por plataforma | ⏳ próxima |
 
 ## Instalação atual da extensão
 

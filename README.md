@@ -18,7 +18,7 @@ O projeto tem duas partes: a **ponte**, que grava os snapshots a partir da statu
 | Linux · GNOME Shell 50 | extensão (`extension/`): painel em colunas, menu e preferências | ✅ pronto |
 | Linux · waybar (Sway, Hyprland…) | módulo `custom/claude` (`waybar/`): texto colorido + tooltip com cotas e janelas | ✅ pronto |
 | macOS | plugin SwiftBar/xbar (`macos/`): título na barra de menus + menu com cotas e janelas | ✅ pronto (ainda não testado num Mac real) |
-| Linux · KDE Plasma 6 | plasmoid nativo | 🚧 planejado (T10) |
+| Linux · KDE Plasma 6 | plasmoid nativo (`kde/`): texto no painel + popup com cotas e janelas, configurável | ✅ pronto |
 | Qualquer terminal | a própria statusline do Claude Code (`Opus 5.5 · ctx 42% · session 31% · weekly 12%`) | ✅ pronto |
 
 Requisitos comuns: `bash` (3.2+) e `jq` (1.6+). No Windows, a ponte roda via WSL ou Git Bash, mas ainda não há mostrador para a bandeja do sistema.
@@ -56,9 +56,18 @@ cp macos/claude-status.5s.sh "<pasta de plugins do SwiftBar/xbar>/"
 
 O `5s` do nome é o intervalo de atualização (renomeie para `10s`, `1m`… se quiser). Os dados ficam em `~/.cache/claude-status`, como no Linux.
 
+### KDE Plasma 6
+
+```bash
+./install.sh                                        # ponte + resumidor em ~/.local/bin
+kpackagetool6 -t Plasma/Applet -i kde/org.claudestatus.monitor   # atualizar: -u no lugar de -i
+```
+
+Depois: botão direito no painel → *Adicionar widgets* → **Claude Status Monitor**. Limiares, inatividade e intervalo ficam em *Configurar Claude Status Monitor*.
+
 ## Desenvolvimento
 
-- Ponte: `bridge/test.sh` · resumidor: `bridge/test-summary.sh` · instalador: `./test-install.sh` · extensão: `gjs -m extension/test.js` · waybar: `waybar/test.sh` · macOS: `macos/test.sh`
+- Ponte: `bridge/test.sh` · resumidor: `bridge/test-summary.sh` · instalador: `./test-install.sh` · extensão: `gjs -m extension/test.js` · waybar: `waybar/test.sh` · macOS: `macos/test.sh` · KDE: `gjs -m kde/test.js`
 - Ao mudar o schema (`extension/schemas/*.gschema.xml`), recompilar: `glib-compile-schemas extension/schemas`
 - A UI da extensão (painel, menu, preferências) é toda em inglês.
 

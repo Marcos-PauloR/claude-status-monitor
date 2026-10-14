@@ -1,0 +1,14 @@
+{
+    "KPlugin": {
+        "Id": "org.claudestatus.monitor",
+        "Name": "Claude Status Monitor",
+        "Description": "Context and plan usage of your Claude Code sessions (session, weekly, ctx per window).",
+        "Icon": "utilities-system-monitor",
+        "Category": "System Information",
+        "Authors": [{ "Name": "Marcos Paulo R" }],
+        "License": "MIT",
+        "Version": "1.1"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
