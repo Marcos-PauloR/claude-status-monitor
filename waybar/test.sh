@@ -10,7 +10,8 @@ export CLAUDE_STATUS_SUMMARY="$HERE/../bridge/claude-status-summary.sh"
 TMP="$(mktemp -d)"
 PID=""
 trap '[ -n "$PID" ] && kill $PID 2>/dev/null; rm -rf "$TMP"' EXIT
-export XDG_CACHE_HOME="$TMP/cache"
+export XDG_CACHE_HOME="$TMP/cache" XDG_CONFIG_HOME="$TMP/config" LANG=C
+unset LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG CLAUDE_STATUS_WARN CLAUDE_STATUS_CRIT CLAUDE_STATUS_INACTIVE_MINUTES
 SESS="$XDG_CACHE_HOME/claude-status/sessions"
 
 PASS=0

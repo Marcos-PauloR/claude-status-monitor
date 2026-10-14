@@ -1,21 +1,42 @@
 #!/usr/bin/env bash
 # Claude Status Monitor — resumidor dos snapshots para os mostradores sem GNOME.
 #
-# Uso: claude-status-summary.sh [--format text|json|waybar|swiftbar] [--warn N] [--crit N] [--inactive MIN]
+# Uso: claude-status-summary.sh [--format text|json|waybar|swiftbar] [--warn N] [--crit N]
+#                               [--inactive MIN] [--lang auto|en|pt]
 #
 # Lê ${XDG_CACHE_HOME:-~/.cache}/claude-status/{sessions/*.json,compacts.jsonl} e aplica
 # as mesmas regras do painel do GNOME (extension/store.js): janelas ativas (RF05), cota do
 # snapshot mais recente com limits (RF07), nível de cor (RF02) e compacts da semana (RF09).
-# Opções também via ambiente: CLAUDE_STATUS_WARN, CLAUDE_STATUS_CRIT,
-# CLAUDE_STATUS_INACTIVE_MINUTES. Roda com bash 3.2 (macOS) e jq 1.6+.
+# Precedência: flag > ambiente (CLAUDE_STATUS_WARN, _CRIT, _INACTIVE_MINUTES, _LANG) >
+# ${XDG_CONFIG_HOME:-~/.config}/claude-status/config (warn=, crit=, inactive=, lang=) > padrão.
+# lang=auto segue o idioma do sistema (pt_* -> português). Roda com bash 3.2 (macOS) e jq 1.6+.
 
 BASE="${XDG_CACHE_HOME:-$HOME/.cache}/claude-status"
-format="text"
-warn="${CLAUDE_STATUS_WARN:-70}"
-crit="${CLAUDE_STATUS_CRIT:-90}"
-inactive="${CLAUDE_STATUS_INACTIVE_MINUTES:-15}"
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/claude-status/config"
 
 die() { printf 'claude-status-summary: %s\n' "$1" >&2; exit 2; }
+trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
+is_num() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; }
+
+# Config: uma chave=valor por linha, '#' comenta; valores inválidos são ignorados.
+cfg_warn="" cfg_crit="" cfg_inactive="" cfg_lang=""
+if [ -f "$CONFIG" ]; then
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    key="$(trim "$key")"; value="$(trim "${value:-}")"
+    case "$key" in
+      warn) is_num "$value" && cfg_warn="$value" ;;
+      crit) is_num "$value" && cfg_crit="$value" ;;
+      inactive) is_num "$value" && cfg_inactive="$value" ;;
+      lang) case "$value" in auto|en|pt) cfg_lang="$value" ;; esac ;;
+    esac
+  done < "$CONFIG"
+fi
+
+format="text"
+warn="${CLAUDE_STATUS_WARN:-${cfg_warn:-70}}"
+crit="${CLAUDE_STATUS_CRIT:-${cfg_crit:-90}}"
+inactive="${CLAUDE_STATUS_INACTIVE_MINUTES:-${cfg_inactive:-15}}"
+lang="${CLAUDE_STATUS_LANG:-${cfg_lang:-auto}}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -23,6 +44,9 @@ while [ $# -gt 0 ]; do
     --warn) warn="${2:-}"; shift ;;
     --crit) crit="${2:-}"; shift ;;
     --inactive) inactive="${2:-}"; shift ;;
+    --lang)
+      case "${2:-}" in auto|en|pt) lang="$2" ;; *) die "idioma inválido: ${2:-} (auto, en ou pt)" ;; esac
+      shift ;;
     *) die "opção desconhecida: $1" ;;
   esac
   shift
@@ -30,8 +54,13 @@ done
 
 case "$format" in json|text|waybar|swiftbar) ;; *) die "formato desconhecido: $format" ;; esac
 for n in "$warn" "$crit" "$inactive"; do
-  case "$n" in ''|*[!0-9]*) die "número inválido: $n" ;; esac
+  is_num "$n" || die "número inválido: $n"
 done
+# auto: idioma do sistema (LC_ALL > LC_MESSAGES > LANG); qualquer coisa fora de pt_* é inglês.
+case "$lang" in
+  en|pt) ;;
+  *) case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in pt*) lang="pt" ;; *) lang="en" ;; esac ;;
+esac
 
 # Arquivos começados com '.' são temporários da escrita atômica da ponte (o glob já os ignora).
 shopt -s nullglob
@@ -46,11 +75,18 @@ hist="$BASE/compacts.jsonl"
 exec jq -nrR \
   --rawfile hist "$hist" \
   --arg format "$format" \
+  --arg lang "$lang" \
   --arg base "$BASE" \
   --arg swiftbar "${SWIFTBAR:-}" \
   --argjson now "${CLAUDE_STATUS_NOW:-$(date +%s)}" \
   --argjson warn "$warn" --argjson crit "$crit" --argjson inactive "$inactive" '
   def num: if type == "number" then . else null end;
+  def tr: if $lang == "pt" then ({
+      "session": "sessão", "weekly": "semana", "resets": "reinicia", "compacts": "compactações",
+      "resets in": "reinicia em", "just reset": "reiniciada", "no data yet": "sem dados ainda",
+      "compacts this week": "compactações na semana", "no active windows": "nenhuma janela ativa",
+      "(no project)": "(sem projeto)", "Open data folder": "Abrir pasta de dados", "Refresh": "Atualizar"
+    }[.] // .) else . end;
   def level: if num == null then 0 elif . >= $crit then 2 elif . >= $warn then 1 else 0 end;
   def quota: if type == "object" and (.used_pct | num) != null then
       (.resets_at | num) as $r
@@ -64,6 +100,7 @@ exec jq -nrR \
         elif $h < 24 then "\($h)h\($m % 60 | tostring | if length < 2 then "0" + . else . end)"
         else "\($h / 24 | floor)d\($h % 24)h" end
     end;
+  def when: if .reset then ("just reset" | tr) else "\("resets in" | tr) \(.resets_in | dur)" end;
   # "900", "55k", "1M", "1.5M".
   def tokens: if num == null then "—"
       elif . >= 1000000 then "\(. / 100000 | round / 10)M"
@@ -82,12 +119,12 @@ exec jq -nrR \
   # Cores legíveis em barra clara; o SwiftBar aceita o par "clara,escura".
   def sbcolor: [null, ["#b8860b", "#f6d32d"], ["#d63c25", "#ff7b63"]][level]
     | if . == null then "" elif $swiftbar != "" then " color=\(.[0]),\(.[1])" else " color=\(.[0])" end;
-  def sbquota($title): ($title + "         " | .[0:9]) as $t
-    | if . == null then "\($title)  no data yet"
-      else "\($t)\(.pct | blocks | add)  \(.pct)%  \(if .reset then "just reset" else "resets in \(.resets_in | dur)" end) | font=Menlo size=12\(.pct | sbcolor)" end;
+  def sbquota($title): ($title | tr) as $name | ($name + "         " | .[0:9]) as $t
+    | if . == null then "\($name)  \("no data yet" | tr)"
+      else "\($t)\(.pct | blocks | add)  \(.pct)%  \(when) | font=Menlo size=12\(.pct | sbcolor)" end;
   def pct: if . == null then "—" else "\(.)%" end;
-  def quota_line($title): if . == null then "<b>\($title)</b>  no data yet"
-      else "<b>\($title)</b>  <tt>\(.pct | bar)</tt>  \(.pct)%  \(if .reset then "just reset" else "resets in \(.resets_in | dur)" end)" end;
+  def quota_line($title): if . == null then "<b>\($title | tr)</b>  \("no data yet" | tr)"
+      else "<b>\($title | tr)</b>  <tt>\(.pct | bar)</tt>  \(.pct)%  \(when)" end;
   def week_start($limits): ($limits.seven_day.resets_at | num) as $r
     | if $r == null then $now - 604800 elif $r <= $now then $r else $r - 604800 end;
 
@@ -127,18 +164,18 @@ exec jq -nrR \
   | if $format == "json" then $s | tojson
     elif $format == "waybar" then
       (["normal", "warn", "crit"][$s.level]) as $class
-      | if $s.empty then { text: "Claude —", tooltip: "no active windows", class: "empty", alt: "empty", percentage: 0 }
+      | if $s.empty then { text: "Claude —", tooltip: ("no active windows" | tr), class: "empty", alt: "empty", percentage: 0 }
         else {
           text: ([ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
-                   (if $s.session != null then "session \($s.session.pct)%", "resets \($s.session.resets_in | dur)" else empty end),
-                   (if $s.weekly != null then "weekly \($s.weekly.pct)%" else empty end)
+                   (if $s.session != null then "\("session" | tr) \($s.session.pct)%", "\("resets" | tr) \($s.session.resets_in | dur)" else empty end),
+                   (if $s.weekly != null then "\("weekly" | tr) \($s.weekly.pct)%" else empty end)
                  ] | if length == 0 then $s.model else join(" · ") end),
           tooltip: ([ ($s.session | quota_line("session")),
                       ($s.weekly | quota_line("weekly")),
-                      "compacts this week: \($s.week_compacts)",
+                      "\("compacts this week" | tr): \($s.week_compacts)",
                       ($s.windows[] | "",
-                        "<b>\([.project // "(no project)", .name] | map(select(. != null)) | join(" — ") | esc)</b>",
-                        "\(.model // "—" | esc) · compacts \(.compacts)",
+                        "<b>\([.project // ("(no project)" | tr), .name] | map(select(. != null)) | join(" — ") | esc)</b>",
+                        "\(.model // "—" | esc) · \("compacts" | tr) \(.compacts)",
                         "ctx  <tt>\(.ctx | bar)</tt>  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens)")
                     ] | join("\n")),
           class: $class,
@@ -147,29 +184,29 @@ exec jq -nrR \
         } end
       | tojson
     elif $format == "swiftbar" then
-      ([ "---", "Open data folder | bash=/usr/bin/open param1=\($base) terminal=false", "Refresh | refresh=true" ]) as $footer
-      | if $s.empty then [ "✳ Claude —", "---", "no active windows" ] + $footer | join("\n")
+      ([ "---", "\("Open data folder" | tr) | bash=/usr/bin/open param1=\($base) terminal=false", "\("Refresh" | tr) | refresh=true" ]) as $footer
+      | if $s.empty then [ "✳ Claude —", "---", ("no active windows" | tr) ] + $footer | join("\n")
         else [ ("✳ " + ([ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
-                          (if $s.session != null then "session \($s.session.pct)%" else empty end),
-                          (if $s.weekly != null then "weekly \($s.weekly.pct)%" else empty end)
+                          (if $s.session != null then "\("session" | tr) \($s.session.pct)%" else empty end),
+                          (if $s.weekly != null then "\("weekly" | tr) \($s.weekly.pct)%" else empty end)
                         ] | if length == 0 then $s.model else join(" · ") end)
                   + ($s.level as $l | if $l == 0 then "" else " |" + ([0, $warn, $crit][$l] | sbcolor) end)),
                "---",
                ($s.session | sbquota("session")),
                ($s.weekly | sbquota("weekly")),
-               "compacts this week: \($s.week_compacts)",
+               "\("compacts this week" | tr): \($s.week_compacts)",
                ($s.windows[] | "---",
-                 "\([.project // "(no project)", .name] | map(select(. != null) | sbesc) | join(" — ")) | size=13",
-                 "\(.model // "—" | sbesc) · compacts \(.compacts) | size=11 color=#888888",
+                 "\([.project // ("(no project)" | tr), .name] | map(select(. != null) | sbesc) | join(" — ")) | size=13",
+                 "\(.model // "—" | sbesc) · \("compacts" | tr) \(.compacts) | size=11 color=#888888",
                  "ctx  \(.ctx | blocks | add)  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens) | font=Menlo size=12\(.ctx | sbcolor)")
              ] + $footer | join("\n")
         end
     elif $s.empty then "Claude —"
     else [ $s.model,
            (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
-           (if $s.session != null then "session \($s.session.pct)%", "resets \($s.session.resets_in | dur)" else empty end),
-           "compacts \($s.compacts)",
-           (if $s.weekly != null then "weekly \($s.weekly.pct)%" else empty end)
+           (if $s.session != null then "\("session" | tr) \($s.session.pct)%", "\("resets" | tr) \($s.session.resets_in | dur)" else empty end),
+           "\("compacts" | tr) \($s.compacts)",
+           (if $s.weekly != null then "\("weekly" | tr) \($s.weekly.pct)%" else empty end)
          ] | join(" · ")
     end
 ' "${files[@]}"

@@ -3,7 +3,7 @@
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-export HOME="$TMP/home"; unset CLAUDE_CONFIG_DIR
+export HOME="$TMP/home" LANG=C; unset CLAUDE_CONFIG_DIR XDG_CONFIG_HOME LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG
 S="$HOME/.claude/settings.json"; B="$HOME/.local/bin/claude-status-bridge.sh"; R="$HOME/.local/bin/claude-status-summary.sh"
 # Permissão em octal: GNU (Linux) ou BSD (macOS).
 mode() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
@@ -130,5 +130,34 @@ inst --target waybar --target kde
 eq "vários alvos de uma vez" "true" "$([ "$RC" = 0 ] && [ -x "$HOME/.local/bin/claude-status-waybar.sh" ] && echo true || echo false)"
 inst --target nope
 eq "alvo inválido: exit 1" 1 "$RC"
+
+echo "== config único (T12)"
+rm -rf "$HOME"; mkdir -p "$HOME"
+C="$HOME/.config/claude-status/config"
+cval() { grep "^$1=" "$C" | cut -d= -f2; }
+inst
+eq "primeira instalação cria config com padrões" "70 90 15 auto" "$(cval warn) $(cval crit) $(cval inactive) $(cval lang)"
+eq "config tem comentário explicando" "true" "$(grep -q '^# warn' "$C" && echo true || echo false)"
+inst --warn 60 --crit 85 --lang pt
+eq "flags gravam no config" "60 85 15 pt" "$(cval warn) $(cval crit) $(cval inactive) $(cval lang)"
+inst --inactive 30
+eq "flag nova preserva as anteriores" "60 85 30 pt" "$(cval warn) $(cval crit) $(cval inactive) $(cval lang)"
+printf 'warn=55\n# meu comentário\ncrit=80\nlang=en\n' > "$C"
+inst
+eq "sem flags: config editado à mão fica intacto" "55 80 en" "$(cval warn) $(cval crit) $(cval lang)"
+before="$(cat "$C")"; rm -f "$B"
+inst --warn 95
+eq "crit < warn (contando o config): exit 1" 1 "$RC"
+eq "crit < warn: nada alterado (config e ponte)" "true" "$([ "$(cat "$C")" = "$before" ] && [ ! -e "$B" ] && echo true || echo false)"
+inst --warn 0
+eq "warn fora de 1..100: exit 1" 1 "$RC"
+inst --crit abc
+eq "crit não numérico: exit 1" 1 "$RC"
+inst --lang xx
+eq "lang inválido: exit 1" 1 "$RC"
+inst --uninstall
+eq "desinstalar mantém o config" "true" "$([ -f "$C" ] && grep -q 'config mantido' <<<"$OUT" && echo true || echo false)"
+inst --warn 50 --crit 60
+eq "resumidor instalado usa o config" "true" "$(XDG_CACHE_HOME="$TMP/c" "$R" --format json | jq -e '.level >= 0' >/dev/null && echo true || echo false)"
 
 echo; echo "Resultado: $PASS ok, $FAIL falha(s)"; [ "$FAIL" -eq 0 ]

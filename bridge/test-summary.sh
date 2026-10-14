@@ -10,6 +10,11 @@ SUMMARY="$HERE/claude-status-summary.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export XDG_CACHE_HOME="$TMP/cache"
+# Isola do ambiente de quem roda os testes: sem config, idioma inglês.
+export XDG_CONFIG_HOME="$TMP/config"
+CONF="$XDG_CONFIG_HOME/claude-status/config"
+export LANG=C
+unset LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG CLAUDE_STATUS_WARN CLAUDE_STATUS_CRIT CLAUDE_STATUS_INACTIVE_MINUTES
 BASE="$XDG_CACHE_HOME/claude-status"
 SESS="$BASE/sessions"
 NOW=1760450000
@@ -186,6 +191,54 @@ eq "reset passado" "session  ░░░░░░░░░░  0%  just reset | fo
 reset
 snap a 10
 eq "sem limits" "session  no data yet" "$(sb | sed -n 3p)"
+
+echo "== config único (T12)"
+conf() { mkdir -p "$(dirname "$CONF")"; printf '%s\n' "$@" > "$CONF"; }
+reset
+snap a 1 '.context.used_pct = 55'
+conf '# limiares' 'warn=50' ' crit = 60 ' 'desconhecida=1'
+eq "warn/crit do config (com comentário, espaços e chave desconhecida)" 1 "$(json .level)"
+conf 'warn=40' 'crit=50'
+eq "crit do config" 2 "$(json .level)"
+eq "ambiente vence o config" 1 "$(CLAUDE_STATUS_CRIT=60 "$SUMMARY" --format json | jq .level)"
+eq "flag vence ambiente e config" 0 "$(CLAUDE_STATUS_WARN=10 "$SUMMARY" --format json --warn 80 --crit 95 | jq .level)"
+conf 'warn=abc' 'crit=' 'inactive=-3'
+eq "valor inválido no config cai no padrão" '[0,false]' "$("$SUMMARY" --format json | jq -c '[.level, .empty]')"
+reset
+snap a 120
+conf 'inactive=1'
+eq "inactive do config" true "$(json .empty)"
+rm -f "$CONF"
+
+echo "== idioma (T12)"
+reset
+snap old 300 '.model = "Sonnet 5.5" | '"$(limits 40 20)"
+snap new 10 '.context.used_pct = 42 | .compacts = 2 | .project = null'
+EN="Opus 5.5 · ctx 42% · session 40% · resets 1h12 · compacts 2 · weekly 20%"
+PT="Opus 5.5 · ctx 42% · sessão 40% · reinicia 1h12 · compactações 2 · semana 20%"
+eq "padrão (LANG=C): inglês" "$EN" "$(text)"
+eq "auto com LANG=pt_BR: português" "$PT" "$(LANG=pt_BR.UTF-8 "$SUMMARY")"
+eq "auto com LANG=en_US: inglês" "$EN" "$(LANG=en_US.UTF-8 "$SUMMARY")"
+eq "LC_ALL vence LANG" "$EN" "$(LANG=pt_BR.UTF-8 LC_ALL=en_US.UTF-8 "$SUMMARY")"
+conf 'lang=pt'
+eq "lang=pt no config" "$PT" "$(text)"
+eq "lang do ambiente vence o config" "$EN" "$(CLAUDE_STATUS_LANG=en "$SUMMARY")"
+eq "--lang vence tudo" "$EN" "$("$SUMMARY" --lang en)"
+eq "--lang inválido: exit 2" 2 "$("$SUMMARY" --lang xx >/dev/null 2>&1; echo $?)"
+eq "json não traduz chaves" '["session","weekly"]' "$(json '[keys[] | select(. == "session" or . == "weekly")]')"
+eq "waybar em pt" "ctx 42% · sessão 40% · reinicia 1h12 · semana 20%" "$("$SUMMARY" --format waybar | jq -r .text)"
+tip="$("$SUMMARY" --format waybar | jq -r .tooltip)"
+eq "tooltip em pt" "true" "$(grep -q 'sessão.*reinicia em 1h12' <<<"$tip" && grep -q 'compactações na semana: 0' <<<"$tip" && grep -q '(sem projeto)' <<<"$tip" && echo true || echo false)"
+out="$("$SUMMARY" --format swiftbar)"
+eq "swiftbar em pt" "true" "$(grep -q '^Abrir pasta de dados |' <<<"$out" && grep -q '^Atualizar | refresh=true' <<<"$out" && grep -q '^semana   █' <<<"$out" && echo true || echo false)"
+reset
+snap a 10 "$(limits 80 30 -1)"
+eq "reiniciada em pt" "true" "$("$SUMMARY" --format swiftbar | grep -q 'reiniciada' && echo true || echo false)"
+reset
+eq "vazio em pt" '["Claude —","nenhuma janela ativa"]' "$("$SUMMARY" --format waybar | jq -c '[.text, .tooltip]')"
+snap a 1
+eq "sem limits em pt" "true" "$("$SUMMARY" --format swiftbar | grep -q '^sessão  sem dados ainda$' && echo true || echo false)"
+rm -f "$CONF"
 
 echo "== robustez"
 reset

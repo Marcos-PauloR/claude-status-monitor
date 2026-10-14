@@ -10,6 +10,10 @@ FX="$HERE/fixtures"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 export XDG_CACHE_HOME="$TMP/cache"
+# Isola do ambiente de quem roda os testes: sem config, idioma inglês.
+export XDG_CONFIG_HOME="$TMP/config"
+export LANG=C
+unset LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG
 SESS="$XDG_CACHE_HOME/claude-status/sessions"
 
 PASS=0
@@ -142,6 +146,24 @@ eq "snapshot removido" "false" "$([ -e "$SESS/sess-full-001.json" ] && echo true
 eq "outras sessões intactas" "true" "$([ -f "$SESS/sess-nolimits-002.json" ] && echo true || echo false)"
 run invalid.json --end
 eq "--end com JSON inválido: exit 0" 0 "$RC"
+
+echo "== idioma da statusline (T12)"
+PT="Opus 5.5 · ctx 42% · sessão 31% · semana 12%"
+OUT="$(LANG=pt_BR.UTF-8 "$BRIDGE" < "$FX/full.json")"
+nocomp() { sed 's/ · compact.*//' <<<"$1"; }
+eq "auto com LANG=pt_BR" "$PT" "$(nocomp "$OUT")"
+mkdir -p "$XDG_CONFIG_HOME/claude-status"
+printf 'warn=50\nlang = pt\n' > "$XDG_CONFIG_HOME/claude-status/config"
+run full.json
+eq "lang=pt no config" "$PT" "$(nocomp "$OUT")"
+eq "snapshot não muda com o idioma" '"Opus 5.5"' "$(snap sess-full-001 .model)"
+OUT="$(CLAUDE_STATUS_LANG=en "$BRIDGE" < "$FX/full.json")"
+eq "ambiente vence o config" "Opus 5.5 · ctx 42% · session 31% · weekly 12%" "$(nocomp "$OUT")"
+printf '{"ts":1,"session_id":"sess-full-001"}\n' >> "$HIST"
+printf '{"ts":%d,"session_id":"sess-full-001"}\n' "$(date +%s)" >> "$HIST"
+run full.json
+eq "compacts em pt" "true" "$(grep -q ' · compactações [0-9]' <<<"$OUT" && echo true || echo false)"
+rm -f "$XDG_CONFIG_HOME/claude-status/config"
 
 echo "== desempenho (< 50 ms por chamada, média de 20)"
 # date +%N não existe no macOS (BSD); lá o perl dá os milissegundos.

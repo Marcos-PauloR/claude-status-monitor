@@ -24,6 +24,17 @@ A ponte já grava os snapshots em arquivos (contrato v1). Cada plataforma só pr
 | T10 | KDE Plasma 6 | plasmoid nativo (QML) lendo `--format json`: texto no painel + popup com cotas e janelas |
 | T11 | Docs e instalação | `install.sh --target gnome\|waybar\|macos\|kde`, README por plataforma, validação |
 
+### v1.2 — idiomas e configuração única
+
+Pedido após o feedback do primeiro usuário externo: instalação mais simples, interface em português e inglês, e limiares de cor definidos por quem instala.
+
+| # | Task | Entregável |
+|---|---|---|
+| T12 | Config único + idiomas no núcleo | `~/.config/claude-status/config` (`warn`, `crit`, `inactive`, `lang=auto\|en\|pt`) lido pela ponte e pelo resumidor; `install.sh --warn --crit --inactive --lang` |
+| T13 | GNOME | chave `language` no GSettings, textos em PT, instalador aplica o config no GSettings |
+| T14 | KDE | idioma e limiares do config único (a tela de configuração pode sobrescrever) |
+| T15 | README PT/EN | link real, comandos prontos por plataforma, desinstalação explícita, glossário |
+
 **Total estimado: ~350k a 650k tokens.** Usar Sonnet nas tasks T1, T2 e T5 tende a reduzir o custo. Opus faz mais sentido em T3/T4 (API do Shell, ciclo de vida da extensão).
 
 **MVP mais barato:** T1 + T2 + T3 (~170–320k). Esse conjunto já entrega o número no painel e a statusline no terminal. Menu e preferências podem vir depois.

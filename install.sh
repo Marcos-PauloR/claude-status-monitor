@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # Claude Status Monitor — instalador.
 #
-# Uso: ./install.sh [--target ALVO]... [--plugin-dir DIR]   instala/atualiza (idempotente)
-#      ./install.sh --uninstall [--target ALVO]...         remove
+# Uso: ./install.sh [--target ALVO]... [opções]      instala/atualiza (idempotente)
+#      ./install.sh --uninstall [--target ALVO]...   remove (o config é mantido)
+#
+# Opções (gravadas em ~/.config/claude-status/config, que também pode ser editado):
+#   --warn N      % a partir do qual fica amarelo (padrão 70)
+#   --crit N      % a partir do qual fica vermelho (padrão 90)
+#   --inactive N  minutos sem atualização até esconder a janela (padrão 15)
+#   --lang L      idioma: auto (do sistema), en ou pt
+#   --plugin-dir  pasta de plugins do SwiftBar/xbar (alvo macos)
 #
 # Sempre: copia a ponte e o resumidor (bridge/claude-status-{bridge,summary}.sh) para
 # ~/.local/bin e faz merge de statusLine e dos hooks PreCompact/SessionEnd em
@@ -28,15 +35,18 @@ WAYBAR_MODULE="$BIN_DIR/claude-status-waybar.sh"
 MACOS_PLUGIN="claude-status.5s.sh"
 MACOS_MARK="plugin SwiftBar/xbar"  # identifica o plugin deste projeto, mesmo renomeado
 KDE_ID="org.claudestatus.monitor"
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/claude-status/config"
 
 die() { printf 'erro: %s\n' "$1" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-usage() { sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+# Ajuda = comentário do topo do arquivo (até a primeira linha que não é comentário).
+usage() { awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"; }
 
 mode="install"
 targets=()
 plugin_dir=""
+opt_warn="" opt_crit="" opt_inactive="" opt_lang=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --uninstall) mode="uninstall" ;;
@@ -47,6 +57,10 @@ while [ $# -gt 0 ]; do
       esac
       shift ;;
     --plugin-dir) plugin_dir="${2:-}"; [ -n "$plugin_dir" ] || die "--plugin-dir precisa de um diretório"; shift ;;
+    --warn) opt_warn="${2:-}"; shift ;;
+    --crit) opt_crit="${2:-}"; shift ;;
+    --inactive) opt_inactive="${2:-}"; shift ;;
+    --lang) opt_lang="${2:-}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "opção desconhecida: $1 (veja --help)" ;;
   esac
@@ -54,6 +68,48 @@ while [ $# -gt 0 ]; do
 done
 
 have jq || die "jq não encontrado (Fedora: sudo dnf install jq · macOS: brew install jq · Debian/Ubuntu: sudo apt install jq)"
+
+# ---------------------------------------------------------------- config único
+
+# Valor atual de uma chave no config (vazio se não houver).
+config_get() {
+  [ -f "$CONFIG" ] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*\([^[:space:]]*\).*/\1/p" "$CONFIG" | tail -n 1
+}
+in_range() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; [ "$1" -ge "$2" ] && [ "$1" -le "$3" ]; }
+
+# Valida tudo antes de alterar qualquer coisa: flags vencem o config, que vence o padrão.
+warn="${opt_warn:-$(config_get warn)}"; warn="${warn:-70}"
+crit="${opt_crit:-$(config_get crit)}"; crit="${crit:-90}"
+inactive="${opt_inactive:-$(config_get inactive)}"; inactive="${inactive:-15}"
+lang="${opt_lang:-$(config_get lang)}"; lang="${lang:-auto}"
+if [ "$mode" = "install" ]; then
+  in_range "$warn" 1 100 || die "--warn precisa ser um número de 1 a 100 (recebido: $warn)"
+  in_range "$crit" 1 100 || die "--crit precisa ser um número de 1 a 100 (recebido: $crit)"
+  in_range "$inactive" 1 1440 || die "--inactive precisa ser um número de 1 a 1440 (recebido: $inactive)"
+  [ "$crit" -ge "$warn" ] || die "vermelho ($crit%) não pode ser menor que amarelo ($warn%)"
+  case "$lang" in auto|en|pt) ;; *) die "--lang precisa ser auto, en ou pt (recebido: $lang)" ;; esac
+fi
+
+# Cria o config na primeira instalação; depois só reescreve se alguma flag foi passada,
+# para não apagar o que a pessoa editou à mão.
+write_config() {
+  if [ -f "$CONFIG" ] && [ -z "$opt_warn$opt_crit$opt_inactive$opt_lang" ]; then
+    echo "config: $CONFIG (sem alterações)"
+    return 0
+  fi
+  mkdir -p "$(dirname "$CONFIG")"
+  cat > "$CONFIG" <<CONF
+# Claude Status Monitor — configuração (pode editar; vale para statusline, waybar, macOS e KDE)
+# warn: % para ficar amarelo · crit: % para ficar vermelho · inactive: minutos até esconder a janela
+# lang: auto (idioma do sistema), en ou pt
+warn=$warn
+crit=$crit
+inactive=$inactive
+lang=$lang
+CONF
+  echo "config: $CONFIG (amarelo ${warn}%, vermelho ${crit}%, inativa após ${inactive} min, idioma $lang)"
+}
 
 # ---------------------------------------------------------------- settings.json
 
@@ -220,6 +276,7 @@ if [ "$mode" = "install" ]; then
   install -m 755 "$HERE/bridge/claude-status-bridge.sh" "$BRIDGE"
   install -m 755 "$HERE/bridge/claude-status-summary.sh" "$SUMMARY"
   echo "ponte instalada em $BRIDGE (resumidor: $SUMMARY)"
+  write_config
   update_settings
   for t in ${targets[@]+"${targets[@]}"}; do "${t}_install"; done
 else
@@ -227,4 +284,5 @@ else
   rm -f "$BRIDGE" "$SUMMARY"
   echo "ponte e resumidor removidos de $BIN_DIR"
   update_settings
+  if [ -f "$CONFIG" ]; then echo "config mantido em $CONFIG (apague à mão se quiser)"; fi
 fi

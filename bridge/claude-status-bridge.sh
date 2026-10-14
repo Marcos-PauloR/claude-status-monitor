@@ -9,6 +9,8 @@
 # Grava um snapshot normalizado (contrato v1, docs/SPEC.md §5) em
 # ${XDG_CACHE_HOME:-~/.cache}/claude-status/sessions/<session_id>.json
 # e imprime uma statusline curta. Nunca falha: qualquer erro vira a linha mínima.
+# Idioma da statusline: CLAUDE_STATUS_LANG > lang= em ~/.config/claude-status/config >
+# idioma do sistema (pt_* -> português, resto inglês).
 
 exec 2>/dev/null
 
@@ -19,6 +21,19 @@ HIST_DAYS=14
 FALLBACK="Claude"
 
 input="$(cat)"
+
+lang="${CLAUDE_STATUS_LANG:-}"
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/claude-status/config"
+if [ -z "$lang" ] && [ -f "$CONFIG" ]; then
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    key="${key//[[:space:]]/}"
+    [ "$key" = "lang" ] && lang="${value//[[:space:]]/}"
+  done < "$CONFIG"
+fi
+case "$lang" in
+  en|pt) ;;
+  *) case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in pt*) lang="pt" ;; *) lang="en" ;; esac ;;
+esac
 
 # Só caracteres seguros no nome do arquivo (evita path traversal).
 safe_id() { printf '%s' "${1//[^A-Za-z0-9_-]/_}"; }
@@ -57,8 +72,9 @@ hist_file="$HIST"
 [ -f "$hist_file" ] || hist_file=/dev/null
 
 # Uma única chamada ao jq: linha 1 = session_id, linha 2 = statusline, linha 3 = snapshot.
-out="$(jq -r --rawfile hist "$hist_file" '
+out="$(jq -r --rawfile hist "$hist_file" --arg lang "$lang" '
   def pct: if type == "number" then round else null end;
+  def tr: if $lang == "pt" then ({ session: "sessão", weekly: "semana", compacts: "compactações" }[.] // .) else . end;
   def window($w): if ($w | type) == "object"
     then { used_pct: ($w.used_percentage | pct), resets_at: $w.resets_at }
     else null end;
@@ -93,9 +109,9 @@ out="$(jq -r --rawfile hist "$hist_file" '
   | ($s.session_id // ""),
     ([ ($s.model // "Claude"),
        (if $s.context.used_pct != null then "ctx \($s.context.used_pct)%" else empty end),
-       (if $s.limits.five_hour != null then "session \($s.limits.five_hour.used_pct)%" else empty end),
-       (if $s.limits.seven_day != null then "weekly \($s.limits.seven_day.used_pct)%" else empty end),
-       (if $s.compacts > 0 then "compacts \($s.compacts)" else empty end)
+       (if $s.limits.five_hour != null then "\("session" | tr) \($s.limits.five_hour.used_pct)%" else empty end),
+       (if $s.limits.seven_day != null then "\("weekly" | tr) \($s.limits.seven_day.used_pct)%" else empty end),
+       (if $s.compacts > 0 then "\("compacts" | tr) \($s.compacts)" else empty end)
      ] | join(" · ")),
     ($s | tojson)
 ' <<<"$input")"

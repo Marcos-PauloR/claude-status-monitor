@@ -16,6 +16,11 @@ Atualizado em 2026-10-14.
 | T9 macOS (SwiftBar/xbar) | ✅ pronta — `macos/test.sh` (10 ok, simulando o PATH mínimo do SwiftBar), resumidor 63 ok; todas as suítes ok no bash 3.2; **falta validar num Mac real** |
 | T10 KDE Plasma 6 (plasmoid) | ✅ pronta — `gjs -m kde/test.js` (19 ok); carregado no `plasmoidviewer` do Plasma 6.7.5 (container, sway headless): painel e popup ok, sem erros de QML; **tela de configuração não exercitada** |
 | T11 Docs e instalação por plataforma | ✅ pronta — `install.sh --target gnome\|kde\|waybar\|macos` (instalador 54 ok, com comandos externos simulados; `--target gnome` rodado de verdade aqui, idempotente); README reescrito; SPEC §4.3 |
+| **v1.2** | |
+| T12 Config único + idiomas (núcleo) | ✅ pronta — `~/.config/claude-status/config` (warn/crit/inactive/lang) lido pela ponte e pelo resumidor; `install.sh --warn --crit --inactive --lang`; ponte 67, resumidor 84, instalador 66 ok (também no bash 3.2) |
+| T13 GNOME: idioma + config | ⏳ próxima |
+| T14 KDE: idioma + config | — |
+| T15 README PT/EN | — |
 
 ## Instalação atual da extensão
 
