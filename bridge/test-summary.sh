@@ -50,6 +50,7 @@ text() { "$SUMMARY" "$@"; }
 echo "== vazio (RF06)"
 reset
 eq "sem snapshots: json" '{"empty":true,"windows":[]}' "$(json '{empty, windows}')"
+eq "sem snapshots: json com idioma e limiares (T14)" '["en",70,90]' "$(json '[.lang, .warn, .crit]')"
 eq "sem snapshots: texto" "Claude —" "$(text)"
 rm -rf "$BASE"
 eq "sem diretório: texto" "Claude —" "$(text)"
@@ -202,6 +203,8 @@ conf 'warn=40' 'crit=50'
 eq "crit do config" 2 "$(json .level)"
 eq "ambiente vence o config" 1 "$(CLAUDE_STATUS_CRIT=60 "$SUMMARY" --format json | jq .level)"
 eq "flag vence ambiente e config" 0 "$(CLAUDE_STATUS_WARN=10 "$SUMMARY" --format json --warn 80 --crit 95 | jq .level)"
+eq "json traz os limiares do config (T14)" '[40,50]' "$(json '[.warn, .crit]')"
+eq "json traz os limiares da flag (T14)" '[80,95]' "$("$SUMMARY" --format json --warn 80 --crit 95 | jq -c '[.warn, .crit]')"
 conf 'warn=abc' 'crit=' 'inactive=-3'
 eq "valor inválido no config cai no padrão" '[0,false]' "$("$SUMMARY" --format json | jq -c '[.level, .empty]')"
 reset
@@ -225,6 +228,10 @@ eq "lang=pt no config" "$PT" "$(text)"
 eq "lang do ambiente vence o config" "$EN" "$(CLAUDE_STATUS_LANG=en "$SUMMARY")"
 eq "--lang vence tudo" "$EN" "$("$SUMMARY" --lang en)"
 eq "--lang inválido: exit 2" 2 "$("$SUMMARY" --lang xx >/dev/null 2>&1; echo $?)"
+eq "json traz o idioma do config (T14)" '"pt"' "$(json .lang)"
+eq "json: --lang vence o config (T14)" '"en"' "$("$SUMMARY" --format json --lang en | jq .lang)"
+eq "json: auto vira o idioma resolvido (T14)" '"pt"' "$(rm -f "$CONF"; LANG=pt_BR.UTF-8 "$SUMMARY" --format json | jq .lang)"
+conf 'lang=pt'
 eq "json não traduz chaves" '["session","weekly"]' "$(json '[keys[] | select(. == "session" or . == "weekly")]')"
 eq "waybar em pt" "ctx 42% · sessão 40% · reinicia 1h12 · semana 20%" "$("$SUMMARY" --format waybar | jq -r .text)"
 tip="$("$SUMMARY" --format waybar | jq -r .tooltip)"

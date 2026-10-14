@@ -56,7 +56,7 @@ Abra uma nova sessão do Claude Code para a statusline começar a gravar os snap
 ## Configuração
 
 - **GNOME:** menu → *Preferences* (limiares de cor, inatividade, campos e posição no painel).
-- **KDE:** *Configurar Claude Status Monitor* (limiares, inatividade e intervalo).
+- **KDE:** *Configurar Claude Status Monitor* (limiares, inatividade, idioma e intervalo). O que estiver como "do config" segue `~/.config/claude-status/config`.
 - **waybar e macOS:** argumentos do resumidor, `--warn 70 --crit 90 --inactive 15`, no `exec` do waybar ou em `ARGS` no plugin. Também valem as variáveis `CLAUDE_STATUS_WARN`, `CLAUDE_STATUS_CRIT` e `CLAUDE_STATUS_INACTIVE_MINUTES`.
 
 ## Desenvolvimento

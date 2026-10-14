@@ -161,7 +161,7 @@ exec jq -nrR \
            level: (.context.used_pct | level)
          } ]
        } end) as $s
-  | if $format == "json" then $s | tojson
+  | if $format == "json" then $s + { lang: $lang, warn: $warn, crit: $crit } | tojson
     elif $format == "waybar" then
       (["normal", "warn", "crit"][$s.level]) as $class
       | if $s.empty then { text: "Claude —", tooltip: ("no active windows" | tr), class: "empty", alt: "empty", percentage: 0 }

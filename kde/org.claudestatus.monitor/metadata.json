@@ -7,7 +7,7 @@
         "Category": "System Information",
         "Authors": [{ "Name": "Marcos Paulo R" }],
         "License": "MIT",
-        "Version": "1.1"
+        "Version": "1.2"
     },
     "KPackageStructure": "Plasma/Applet",
     "X-Plasma-API-Minimum-Version": "6.0"

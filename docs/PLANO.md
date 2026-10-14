@@ -32,8 +32,8 @@ Pedido após o feedback do primeiro usuário externo: instalação mais simples,
 |---|---|---|
 | T12 | Config único + idiomas no núcleo | `~/.config/claude-status/config` (`warn`, `crit`, `inactive`, `lang=auto\|en\|pt`) lido pela ponte e pelo resumidor; `install.sh --warn --crit --inactive --lang` |
 | T13 | GNOME | preferências em abas (General, Indicators, About) no estilo do system-monitor-next: arrastar para reordenar, liga/desliga e limiares próprios por indicador; `language` (auto/en/pt); cor por coluna; instalador aplica as flags no GSettings |
-| T14 | KDE | idioma e limiares do config único (a tela de configuração pode sobrescrever) |
-| T15 | README PT/EN | link real, comandos prontos por plataforma, desinstalação explícita, glossário |
+| T14 | KDE | idioma e limiares do config único (a tela de configuração pode sobrescrever; o que já foi ajustado na v1.1 continua valendo); versão `1.2` em todos os mostradores (GNOME via `version-name`) |
+| T15 | `--update` + README PT/EN | `install.sh --update`: grava os alvos instalados no config (`targets=`), faz `git pull` e reinstala só eles (rede só quando a pessoa pede); README com link real, comandos prontos por plataforma, seção "Atualizar", desinstalação explícita, glossário |
 
 **Total estimado: ~350k a 650k tokens.** Usar Sonnet nas tasks T1, T2 e T5 tende a reduzir o custo. Opus faz mais sentido em T3/T4 (API do Shell, ciclo de vida da extensão).
 

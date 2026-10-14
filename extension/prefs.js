@@ -289,7 +289,7 @@ export default class ClaudeStatusPreferences extends ExtensionPreferences {
         const details = new Adw.PreferencesGroup({
             description: t('No network access, no credentials: the data comes from the Claude Code statusline.'),
         });
-        details.add(new Adw.ActionRow({title: t('Version'), subtitle: String(this.metadata.version)}));
+        details.add(new Adw.ActionRow({title: t('Version'), subtitle: String(this.metadata['version-name'] ?? this.metadata.version)}));
         for (const [title, uri] of [[t('Source code'), REPO], [t('Report an issue'), `${REPO}/issues`]]) {
             const link = new Adw.ActionRow({title, subtitle: uri, activatable: true});
             link.add_suffix(new Gtk.Image({icon_name: 'adw-external-link-symbolic'}));

@@ -1,5 +1,6 @@
 // Claude Status Monitor — plasmoid do KDE Plasma 6.
 // Roda claude-status-summary.sh --format json a cada N segundos (mesmas regras do painel do GNOME).
+// Limiares, inatividade e idioma vêm do config único, a não ser que tenham sido mudados aqui.
 
 import QtCore
 import QtQuick
@@ -20,8 +21,8 @@ PlasmoidItem {
 
     readonly property var cfg: Plasmoid.configuration
     // O plasmashell nem sempre tem ~/.local/bin no PATH; o motor "executable" roda via shell.
-    readonly property string command: 'PATH="$HOME/.local/bin:$PATH" claude-status-summary.sh --format json'
-        + " --warn " + cfg.warnThreshold + " --crit " + cfg.critThreshold + " --inactive " + cfg.inactiveMinutes
+    readonly property string command: 'PATH="$HOME/.local/bin:$PATH" claude-status-summary.sh ' + Fmt.summaryArgs(cfg)
+    readonly property string lang: summary && summary.lang ? summary.lang : Fmt.fallbackLang(cfg.language, Qt.locale().name)
     readonly property string dataDir: StandardPaths.writableLocation(StandardPaths.GenericCacheLocation) + "/claude-status"
 
     function levelColor(level) {
@@ -29,8 +30,8 @@ PlasmoidItem {
             : level === 1 ? Kirigami.Theme.neutralTextColor
             : Kirigami.Theme.textColor;
     }
-    function levelOf(p) {
-        return typeof p !== "number" ? 0 : p >= cfg.critThreshold ? 2 : p >= cfg.warnThreshold ? 1 : 0;
+    function tr(text) {
+        return Fmt.tr(lang, text);
     }
 
     Plasmoid.status: summary && !summary.empty ? PlasmaCore.Types.ActiveStatus : PlasmaCore.Types.PassiveStatus
@@ -67,7 +68,7 @@ PlasmoidItem {
 
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
-            text: "Open data folder"
+            text: root.tr("Open data folder")
             icon.name: "folder-open"
             onTriggered: Qt.openUrlExternally(root.dataDir)
         }
@@ -110,8 +111,8 @@ PlasmoidItem {
                 visible: !!parent.quota
             }
             PlasmaComponents.Label {
-                text: Fmt.quotaDetail(parent.quota)
-                color: root.levelColor(root.levelOf(parent.quota ? parent.quota.pct : null))
+                text: Fmt.quotaDetail(parent.quota, root.lang)
+                color: root.levelColor(Fmt.level(parent.quota ? parent.quota.pct : null, root.summary))
             }
         }
 
@@ -128,7 +129,7 @@ PlasmoidItem {
         }
         PlasmaComponents.Label {
             visible: !root.error && (!root.summary || root.summary.empty)
-            text: "no active windows"
+            text: root.tr("no active windows")
             opacity: 0.6
         }
 
@@ -137,10 +138,10 @@ PlasmoidItem {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
-            QuotaRow { title: "session"; quota: root.summary ? root.summary.session : null }
-            QuotaRow { title: "weekly"; quota: root.summary ? root.summary.weekly : null }
+            QuotaRow { title: root.tr("session"); quota: root.summary ? root.summary.session : null }
+            QuotaRow { title: root.tr("weekly"); quota: root.summary ? root.summary.weekly : null }
             PlasmaComponents.Label {
-                text: "compacts this week: " + (root.summary ? root.summary.week_compacts : 0)
+                text: root.tr("compacts this week") + ": " + (root.summary ? root.summary.week_compacts : 0)
                 opacity: 0.75
             }
 
@@ -154,13 +155,13 @@ PlasmoidItem {
 
                     Kirigami.Separator { Layout.fillWidth: true; Layout.bottomMargin: Kirigami.Units.smallSpacing }
                     PlasmaComponents.Label {
-                        text: Fmt.windowTitle(modelData)
+                        text: Fmt.windowTitle(modelData, root.lang)
                         font.bold: true
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
                     PlasmaComponents.Label {
-                        text: (modelData.model || "—") + " · compacts " + modelData.compacts
+                        text: (modelData.model || "—") + " · " + root.tr("compacts") + " " + modelData.compacts
                         opacity: 0.65
                     }
                     RowLayout {
@@ -189,7 +190,7 @@ PlasmoidItem {
             Layout.alignment: Qt.AlignRight
             Layout.topMargin: Kirigami.Units.smallSpacing
             icon.name: "folder-open"
-            text: "Open data folder"
+            text: root.tr("Open data folder")
             onClicked: Qt.openUrlExternally(root.dataDir)
         }
     }

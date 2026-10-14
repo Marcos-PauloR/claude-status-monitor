@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # <xbar.title>Claude Status Monitor</xbar.title>
-# <xbar.version>v1.1</xbar.version>
+# <xbar.version>v1.2</xbar.version>
 # <xbar.author>Marcos Paulo R</xbar.author>
 # <xbar.desc>Context and plan usage of your Claude Code sessions (session, weekly, ctx per window).</xbar.desc>
 # <xbar.dependencies>bash,jq</xbar.dependencies>

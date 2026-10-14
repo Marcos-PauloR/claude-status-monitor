@@ -6,6 +6,7 @@
     "50"
   ],
   "version": 2,
+  "version-name": "1.2",
   "settings-schema": "org.gnome.shell.extensions.claude-status",
   "url": "https://github.com/Marcos-PauloR/claude-status-monitor"
 }
