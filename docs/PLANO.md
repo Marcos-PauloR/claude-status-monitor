@@ -31,7 +31,7 @@ Pedido após o feedback do primeiro usuário externo: instalação mais simples,
 | # | Task | Entregável |
 |---|---|---|
 | T12 | Config único + idiomas no núcleo | `~/.config/claude-status/config` (`warn`, `crit`, `inactive`, `lang=auto\|en\|pt`) lido pela ponte e pelo resumidor; `install.sh --warn --crit --inactive --lang` |
-| T13 | GNOME | chave `language` no GSettings, textos em PT, instalador aplica o config no GSettings |
+| T13 | GNOME | preferências em abas (General, Indicators, About) no estilo do system-monitor-next: arrastar para reordenar, liga/desliga e limiares próprios por indicador; `language` (auto/en/pt); cor por coluna; instalador aplica as flags no GSettings |
 | T14 | KDE | idioma e limiares do config único (a tela de configuração pode sobrescrever) |
 | T15 | README PT/EN | link real, comandos prontos por plataforma, desinstalação explícita, glossário |
 

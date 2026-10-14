@@ -135,11 +135,15 @@ export function level(pct, thresholds = {warn: 70, crit: 90}) {
  * Resumo para o painel e o menu (RF01–RF07).
  * @param {Iterable<object>} snapshots
  * @param {number} now epoch em segundos
- * @param {{inactiveMinutes?: number, warn?: number, crit?: number}} opts
- * @returns {null | {model, ctx, compacts, session, sessionResets, weekly, level, active, windows, quotas, weekStart}}
+ * @param {{inactiveMinutes?: number, warn?: number, crit?: number,
+ *          thresholds?: Object<string, {warn: number, crit: number}>}} opts
+ *   warn/crit são os limiares gerais; `thresholds` sobrescreve por indicador (ctx, session, weekly).
+ * @returns {null | {model, ctx, compacts, session, sessionResets, weekly, level, levels, active, windows,
+ *                   quotas, weekStart}}
  */
 export function summarize(snapshots, now, opts = {}) {
-    const {inactiveMinutes = 15, warn = 70, crit = 90} = opts;
+    const {inactiveMinutes = 15, warn = 70, crit = 90, thresholds = {}} = opts;
+    const lv = (key, p) => level(p, {warn, crit, ...thresholds[key]});
     const all = [...snapshots].filter(Boolean).sort((a, b) => b.updated_at - a.updated_at);
     const active = all.filter(s => now - s.updated_at < inactiveMinutes * 60);
     if (active.length === 0)
@@ -151,7 +155,7 @@ export function summarize(snapshots, now, opts = {}) {
     const session = quota(withLimits?.limits?.five_hour, now);
     const weekly = quota(withLimits?.limits?.seven_day, now);
     const ctx = num(latest.context?.used_pct);
-    const lv = p => level(p, {warn, crit});
+    const levels = {ctx: lv('ctx', ctx), session: lv('session', session?.pct), weekly: lv('weekly', weekly?.pct)};
 
     return {
         model: latest.model ?? 'Claude',
@@ -160,7 +164,8 @@ export function summarize(snapshots, now, opts = {}) {
         session: session?.pct ?? null,
         sessionResets: session?.resetsIn ?? null,
         weekly: weekly?.pct ?? null,
-        level: Math.max(...[ctx, session?.pct, weekly?.pct].map(lv)),
+        level: Math.max(levels.ctx, levels.session, levels.weekly),
+        levels,
         active,
         windows: active.map(w => ({
             id: w.session_id,
@@ -171,7 +176,7 @@ export function summarize(snapshots, now, opts = {}) {
             tokens: num(w.context?.tokens),
             window: num(w.context?.window),
             compacts: num(w.compacts) ?? 0,
-            level: lv(w.context?.used_pct),
+            level: lv('ctx', w.context?.used_pct),
         })),
         quotas: {session, weekly},
         weekStart: weekStart(withLimits?.limits, now),

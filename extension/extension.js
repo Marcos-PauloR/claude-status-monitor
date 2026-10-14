@@ -1,6 +1,7 @@
 // Claude Status Monitor — indicador no painel do GNOME Shell.
 // Painel no estilo do system-monitor-next: rótulo pequeno em cima, valor embaixo (SPEC RF01).
 // Menu: cotas da conta no topo, uma entrada por janela ativa (RF03, RF04, RF08, RF09).
+// Cada coluna tem a própria cor, com limiares gerais ou do próprio indicador (T13).
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -12,8 +13,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
+import {resolveLanguage, translator} from './i18n.js';
 import {
-    countSince, dataDir, formatDuration, formatTokens, level, readCompacts, sessionsDir, summarize,
+    countSince, dataDir, formatDuration, formatTokens, readCompacts, sessionsDir, summarize,
 } from './store.js';
 import {SnapshotWatcher} from './watcher.js';
 
@@ -43,15 +45,25 @@ function infoItem(child) {
 
 const pctText = pct => (pct === null || pct === undefined ? '—' : `${pct}%`);
 
-// [chave, rótulo, unidade]
-const COLUMNS = [
-    ['model', 'model', ''],
-    ['ctx', 'ctx', '%'],
-    ['session', 'session', '%'],
-    ['resets', 'resets', ''],
-    ['compacts', 'compacts', ''],
-    ['weekly', 'weekly', '%'],
+// [chave, unidade]; o rótulo é a chave traduzida.
+export const COLUMNS = [
+    ['model', ''],
+    ['ctx', '%'],
+    ['session', '%'],
+    ['resets', ''],
+    ['compacts', ''],
+    ['weekly', '%'],
 ];
+// Nível (cor) de cada coluna: resets acompanha session; model e compacts não mudam de cor.
+const COLUMN_LEVEL = {ctx: 'ctx', session: 'session', resets: 'session', weekly: 'weekly'};
+
+// thresholds-override (a{s(ii)}) -> {ctx: {warn, crit}, ...}
+function overrides(settings) {
+    const out = {};
+    for (const [key, [warn, crit]] of Object.entries(settings.get_value('thresholds-override').deep_unpack()))
+        out[key] = {warn, crit};
+    return out;
+}
 
 const ClaudeStatusIndicator = GObject.registerClass(
 class ClaudeStatusIndicator extends PanelMenu.Button {
@@ -59,7 +71,9 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         super._init(0.0, 'Claude Status', false);
         this._extension = extension;
         this._settings = settings;
+        this._t = translator(resolveLanguage(settings.get_string('language')));
         this._weekStart = null;
+        this._levels = {};
 
         this._box = new St.BoxLayout({style_class: 'claude-status-box'});
         this.add_child(this._box);
@@ -74,14 +88,14 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         this._values = {};
         this._columnActors = {};
         this._columns = new St.BoxLayout({style_class: 'claude-status-columns'});
-        for (const [key, title, unit] of COLUMNS) {
+        for (const [key, unit] of COLUMNS) {
             const column = new St.BoxLayout({
                 orientation: Clutter.Orientation.VERTICAL,
                 style_class: 'claude-status-column',
                 y_align: Clutter.ActorAlign.CENTER,
             });
             column.add_child(new St.Label({
-                text: title,
+                text: this._t(key),
                 style_class: 'claude-status-title',
                 x_align: Clutter.ActorAlign.CENTER,
             }));
@@ -115,7 +129,7 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(this._windowsSection);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        this.menu.addAction('Open data folder', () => {
+        this.menu.addAction(this._t('Open data folder'), () => {
             try {
                 Gio.AppInfo.launch_default_for_uri(Gio.File.new_for_path(dataDir()).get_uri(),
                     global.create_app_launch_context(0, -1));
@@ -123,7 +137,7 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
                 console.warn(`claude-status: não foi possível abrir ${dataDir()}: ${e.message}`);
             }
         });
-        this.menu.addAction('Preferences', () => this._extension.openPreferences());
+        this.menu.addAction(this._t('Preferences'), () => this._extension.openPreferences());
 
         // compacts.jsonl só é lido quando o menu abre (RF09).
         this.menu.connect('open-state-changed', (_menu, open) => {
@@ -135,29 +149,29 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
     _updateWeekCompacts() {
         if (this._weekStart === null)
             return;
-        this._weekCompacts.text = `compacts this week: ${countSince(readCompacts(), this._weekStart)}`;
+        this._weekCompacts.text = `${this._t('compacts this week')}: ${countSince(readCompacts(), this._weekStart)}`;
     }
 
-    _quotaRow(title, quota) {
+    _quotaRow(key, quota) {
         const row = new St.BoxLayout({style_class: 'claude-status-menu-row'});
-        row.add_child(new St.Label({text: title, style_class: 'claude-status-menu-key', y_align: Clutter.ActorAlign.CENTER}));
+        row.add_child(new St.Label({text: this._t(key), style_class: 'claude-status-menu-key', y_align: Clutter.ActorAlign.CENTER}));
         if (!quota) {
-            row.add_child(new St.Label({text: 'no data yet', style_class: 'claude-status-menu-detail'}));
+            row.add_child(new St.Label({text: this._t('no data yet'), style_class: 'claude-status-menu-detail'}));
             return row;
         }
-        row.add_child(makeBar(quota.pct, level(quota.pct, this._thresholds())));
+        row.add_child(makeBar(quota.pct, this._levels[key] ?? 0));
         row.add_child(new St.Label({text: pctText(quota.pct), style_class: 'claude-status-menu-pct', y_align: Clutter.ActorAlign.CENTER}));
-        const when = quota.reset ? 'just reset' : `resets in ${formatDuration(quota.resetsIn)}`;
+        const when = quota.reset ? this._t('just reset') : `${this._t('resets in')} ${formatDuration(quota.resetsIn)}`;
         row.add_child(new St.Label({text: when, style_class: 'claude-status-menu-detail', y_align: Clutter.ActorAlign.CENTER}));
         return row;
     }
 
     _windowBox(w) {
         const box = new St.BoxLayout({orientation: Clutter.Orientation.VERTICAL, style_class: 'claude-status-menu-window'});
-        const title = [w.project ?? '(no project)', w.name].filter(Boolean).join(' — ');
+        const title = [w.project ?? this._t('(no project)'), w.name].filter(Boolean).join(' — ');
         box.add_child(new St.Label({text: title, style_class: 'claude-status-menu-title'}));
         box.add_child(new St.Label({
-            text: `${w.model ?? '—'} · compacts ${w.compacts}`,
+            text: `${w.model ?? '—'} · ${this._t('compacts')} ${w.compacts}`,
             style_class: 'claude-status-menu-detail',
         }));
         const row = new St.BoxLayout({style_class: 'claude-status-menu-row'});
@@ -180,7 +194,7 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         this._weekStart = s?.weekStart ?? null;
 
         if (!s) {
-            this._windowsSection.addMenuItem(infoItem(new St.Label({text: 'no active windows'})));
+            this._windowsSection.addMenuItem(infoItem(new St.Label({text: this._t('no active windows')})));
             return;
         }
         this._quotaSection.addMenuItem(infoItem(this._quotaRow('session', s.quotas.session)));
@@ -191,25 +205,40 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
             this._windowsSection.addMenuItem(infoItem(this._windowBox(w)));
     }
 
-    _thresholds() {
-        return {warn: this._settings.get_int('warn-threshold'), crit: this._settings.get_int('crit-threshold')};
+    // Ordem (panel-order, completada com o que faltar) e visibilidade (panel-fields) das colunas.
+    _layoutColumns(fields) {
+        const order = this._settings.get_strv('panel-order').filter(k => k in this._columnActors);
+        for (const [key] of COLUMNS) {
+            if (!order.includes(key))
+                order.push(key);
+        }
+        order.forEach((key, i) => this._columns.set_child_at_index(this._columnActors[key], i));
+        for (const [key, column] of Object.entries(this._columnActors))
+            column.visible = fields.includes(key);
     }
 
     update(snapshots) {
         const s = summarize(snapshots, Math.floor(Date.now() / 1000), {
-            ...this._thresholds(),
+            warn: this._settings.get_int('warn-threshold'),
+            crit: this._settings.get_int('crit-threshold'),
+            thresholds: overrides(this._settings),
             inactiveMinutes: this._settings.get_int('inactive-minutes'),
         });
         const fields = this._settings.get_strv('panel-fields');
-        for (const [key, column] of Object.entries(this._columnActors))
-            column.visible = fields.includes(key);
+        this._layoutColumns(fields);
+        this._levels = s?.levels ?? {};
 
         // Sem janelas: "Claude —". Com todos os campos desligados: só "Claude".
         this._empty.text = s ? 'Claude' : 'Claude —';
         this._empty.visible = !s || fields.length === 0;
         this._columns.visible = !!s && fields.length > 0;
-        for (const cls of LEVEL_CLASSES.filter(Boolean))
-            this._box.remove_style_class_name(cls);
+        for (const [key, column] of Object.entries(this._columnActors)) {
+            for (const cls of LEVEL_CLASSES.filter(Boolean))
+                column.remove_style_class_name(cls);
+            const lv = this._levels[COLUMN_LEVEL[key]];
+            if (lv)
+                column.add_style_class_name(LEVEL_CLASSES[lv]);
+        }
         this._updateMenu(s);
         if (!s)
             return;
@@ -221,8 +250,6 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         this._values.resets.text = formatDuration(s.sessionResets);
         this._values.compacts.text = show(s.compacts);
         this._values.weekly.text = show(s.weekly);
-        if (s.level)
-            this._box.add_style_class_name(LEVEL_CLASSES[s.level]);
     }
 });
 
@@ -232,7 +259,8 @@ export default class ClaudeStatusExtension extends Extension {
         this._watcher = new SnapshotWatcher(sessionsDir(), snapshots => this._indicator?.update(snapshots));
         this._addIndicator();
         this._settingsId = this._settings.connect('changed', (_settings, key) => {
-            if (key === 'panel-box' || key === 'panel-index')
+            // Posição e idioma exigem recriar o botão (rótulos e posição são definidos na criação).
+            if (key === 'panel-box' || key === 'panel-index' || key === 'language')
                 this._addIndicator();
             else
                 this._indicator?.update(this._watcher.snapshots);

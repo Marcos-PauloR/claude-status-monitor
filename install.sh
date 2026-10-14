@@ -190,6 +190,15 @@ gnome_install() {
     ln -s "$HERE/extension" "$GNOME_DIR"
     echo "gnome: extensão instalada em $GNOME_DIR"
   fi
+  # Flags passadas também valem nas preferências do GNOME (GSettings).
+  if have gsettings; then
+    local gs=(gsettings --schemadir "$HERE/extension/schemas")
+    local schema="org.gnome.shell.extensions.claude-status"
+    if [ -n "$opt_warn" ]; then "${gs[@]}" set "$schema" warn-threshold "$warn"; fi
+    if [ -n "$opt_crit" ]; then "${gs[@]}" set "$schema" crit-threshold "$crit"; fi
+    if [ -n "$opt_inactive" ]; then "${gs[@]}" set "$schema" inactive-minutes "$inactive"; fi
+    if [ -n "$opt_lang" ]; then "${gs[@]}" set "$schema" language "$lang"; fi
+  fi
   if have gnome-extensions && gnome-extensions enable "$GNOME_UUID" 2>/dev/null; then
     echo "gnome: extensão ativada"
   else

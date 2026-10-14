@@ -6,6 +6,12 @@
     <value nick="right" value="2"/>
   </enum>
 
+  <enum id="org.gnome.shell.extensions.claude-status.language">
+    <value nick="auto" value="0"/>
+    <value nick="en" value="1"/>
+    <value nick="pt" value="2"/>
+  </enum>
+
   <schema id="org.gnome.shell.extensions.claude-status" path="/org/gnome/shell/extensions/claude-status/">
     <key name="warn-threshold" type="i">
       <range min="1" max="100"/>
@@ -25,9 +31,23 @@
       <summary>Minutes until a window is inactive</summary>
       <description>Windows without updates for this long disappear from the panel and the menu.</description>
     </key>
+    <key name="language" enum="org.gnome.shell.extensions.claude-status.language">
+      <default>'auto'</default>
+      <summary>Language</summary>
+      <description>auto follows the session language (pt_* shows Portuguese).</description>
+    </key>
+    <key name="thresholds-override" type="a{s(ii)}">
+      <default>{}</default>
+      <summary>Per-indicator thresholds</summary>
+      <description>Indicator (ctx, session, weekly) -> (warning %, critical %). Indicators not listed use the general thresholds.</description>
+    </key>
+    <key name="panel-order" type="as">
+      <default>['model', 'ctx', 'session', 'resets', 'compacts', 'weekly']</default>
+      <summary>Order of the indicators in the panel</summary>
+    </key>
     <key name="panel-fields" type="as">
       <default>['model', 'ctx', 'session', 'resets', 'compacts', 'weekly']</default>
-      <summary>Fields shown in the panel</summary>
+      <summary>Indicators shown in the panel</summary>
     </key>
     <key name="panel-box" enum="org.gnome.shell.extensions.claude-status.panel-box">
       <default>'right'</default>

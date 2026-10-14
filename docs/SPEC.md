@@ -107,7 +107,7 @@ Histórico de compacts (`compacts.jsonl`, uma linha por compact, últimos 14 dia
 
 ## 5.1 Nomenclatura
 
-Toda a UI (painel, menu e preferências) fica em inglês.
+A UI (painel, menu e preferências) tem inglês e português: `language` = auto (idioma da sessão), en ou pt.
 
 | Termo na UI | Significado |
 |---|---|
@@ -124,7 +124,7 @@ Toda a UI (painel, menu e preferências) fica em inglês.
 | ID | Requisito |
 |---|---|
 | RF01 | O painel segue o estilo do system-monitor-next: para cada campo, um rótulo pequeno em cima e o valor embaixo. Campos: `model`, `ctx`, `session`, `resets`, `compacts`, `weekly` (ver §5.1). `model`, `ctx` e `compacts` são da janela atualizada mais recentemente. |
-| RF02 | A cor do rótulo segue o pior indicador: normal abaixo de 70%, amarelo de 70% a 89%, vermelho a partir de 90% (configurável). |
+| RF02 | Cada indicador do painel tem a própria cor: normal abaixo do amarelo (padrão 70%), amarelo até o vermelho (padrão 90%), vermelho a partir dele. Os limiares gerais valem para todos; `ctx`, `session` e `weekly` podem ter limiares próprios. `resets` acompanha `session`. (No waybar, macOS e KDE, o texto segue o pior indicador.) |
 | RF03 | O menu (dropdown) lista cada janela ativa: projeto (e `session_name`, se houver), `model`, barra de `ctx` em % com tokens/tamanho da janela de contexto, e `compacts`. |
 | RF04 | O topo do menu mostra as cotas da conta, uma vez só: `session` e `weekly`, cada uma com barra, % e "resets in 1h12" (contagem relativa). |
 | RF09 | O menu mostra os compacts da semana: total de entradas em `compacts.jsonl` desde o início da janela semanal atual (`seven_day.resets_at − 7 dias`). Sem `limits`, usa os últimos 7 dias. |

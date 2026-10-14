@@ -18,8 +18,8 @@ Atualizado em 2026-10-14.
 | T11 Docs e instalação por plataforma | ✅ pronta — `install.sh --target gnome\|kde\|waybar\|macos` (instalador 54 ok, com comandos externos simulados; `--target gnome` rodado de verdade aqui, idempotente); README reescrito; SPEC §4.3 |
 | **v1.2** | |
 | T12 Config único + idiomas (núcleo) | ✅ pronta — `~/.config/claude-status/config` (warn/crit/inactive/lang) lido pela ponte e pelo resumidor; `install.sh --warn --crit --inactive --lang`; ponte 67, resumidor 84, instalador 66 ok (também no bash 3.2) |
-| T13 GNOME: idioma + config | ⏳ próxima |
-| T14 KDE: idioma + config | — |
+| T13 GNOME: preferências em abas + idioma + limiares por indicador | ✅ pronta — abas General/Indicators/About (arrastar para reordenar, liga/desliga, limiares próprios para ctx/session/weekly), PT/EN, cor por coluna; extensão 71 ok, instalador 69 ok; prefs renderizadas em container (EN e PT, 8 prints) e painel/menu no GNOME headless; **arrastar com o mouse não exercitado** |
+| T14 KDE: idioma + config | ⏳ próxima |
 | T15 README PT/EN | — |
 
 ## Instalação atual da extensão

@@ -160,4 +160,12 @@ eq "desinstalar mantém o config" "true" "$([ -f "$C" ] && grep -q 'config manti
 inst --warn 50 --crit 60
 eq "resumidor instalado usa o config" "true" "$(XDG_CACHE_HOME="$TMP/c" "$R" --format json | jq -e '.level >= 0' >/dev/null && echo true || echo false)"
 
+echo "== GNOME recebe as flags no GSettings (T13)"
+stub gsettings; : > "$LOG"
+inst --target gnome
+eq "sem flags: não mexe no GSettings" "0" "$(grep -c '^gsettings' "$LOG")"
+inst --target gnome --warn 60 --lang pt
+eq "flags passadas vão para o GSettings" "true" "$(grep -q 'gsettings --schemadir .* set org.gnome.shell.extensions.claude-status warn-threshold 60' "$LOG" && grep -q 'language pt' "$LOG" && echo true || echo false)"
+eq "flags não passadas não vão" "0" "$(grep -c 'crit-threshold\|inactive-minutes' "$LOG")"
+
 echo; echo "Resultado: $PASS ok, $FAIL falha(s)"; [ "$FAIL" -eq 0 ]

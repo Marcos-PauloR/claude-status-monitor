@@ -7,6 +7,7 @@ import {
     countSince, formatDuration, formatTokens, isSnapshotName, level, parseCompacts, parseSnapshot, summarize, weekStart,
 } from './store.js';
 import {SnapshotWatcher} from './watcher.js';
+import {PT_KEYS, resolveLanguage, translator} from './i18n.js';
 
 let pass = 0, fail = 0;
 function eq(desc, expected, actual) {
@@ -114,6 +115,44 @@ s = summarize([snap('a', 10, {context: {used_pct: 65}, limits: limits(10, 10)})]
 eq('limiar crítico configurável', 2, s.level);
 eq('inatividade configurável', null, summarize([snap('a', 120)], NOW, {inactiveMinutes: 1}));
 eq('inatividade configurável (ativa)', 1, summarize([snap('a', 120)], NOW, {inactiveMinutes: 3}).windows.length);
+
+print('== limiares por indicador (T13)');
+s = summarize([snap('a', 10, {context: {used_pct: 60}, limits: limits(60, 60)})], NOW,
+    {thresholds: {ctx: {warn: 50, crit: 80}, weekly: {warn: 40, crit: 55}}});
+eq('níveis por indicador', {ctx: 1, session: 0, weekly: 2}, s.levels);
+eq('nível geral = pior', 2, s.level);
+eq('janela usa o limiar do ctx', 1, s.windows[0].level);
+s = summarize([snap('a', 10, {context: {used_pct: 60}, limits: limits(60, 60)})], NOW,
+    {warn: 55, crit: 90, thresholds: {session: {warn: 70, crit: 95}}});
+eq('sem override usa o geral; com override usa o próprio', {ctx: 1, session: 0, weekly: 1}, s.levels);
+eq('sem limits: níveis 0', {ctx: 0, session: 0, weekly: 0}, summarize([snap('a', 1)], NOW).levels);
+
+print('== i18n (T13)');
+eq('auto com pt_BR', 'pt', resolveLanguage('auto', ['pt_BR.UTF-8', 'pt_BR', 'pt', 'C']));
+eq('auto com en_US', 'en', resolveLanguage('auto', ['en_US.UTF-8', 'en_US', 'en', 'C']));
+eq('auto com C', 'en', resolveLanguage('auto', ['C']));
+eq('forçado', ['en', 'pt'], [resolveLanguage('en', ['pt_BR']), resolveLanguage('pt', ['C'])]);
+const tPt = translator('pt'), tEn = translator('en');
+eq('traduz', ['sessão', 'Abrir pasta de dados'], [tPt('session'), tPt('Open data folder')]);
+eq('inglês devolve a chave', 'session', tEn('session'));
+eq('chave sem tradução devolve a chave', 'ctx', tPt('ctx'));
+
+print('== i18n: todo texto da UI tem tradução');
+{
+    const dir = GLib.path_get_dirname(import.meta.url.replace('file://', ''));
+    const read = f => new TextDecoder().decode(GLib.file_get_contents(GLib.build_filenamev([dir, f]))[1]);
+    const used = new Set();
+    for (const f of ['extension.js', 'prefs.js']) {
+        for (const m of read(f).matchAll(/(?:^|[^\w])_?t\('([^']+)'\)/g))
+            used.add(m[1]);
+        for (const m of read(f).matchAll(/\b(?:desc|note): '([^']+)'/g))
+            used.add(m[1]);
+    }
+    for (const m of read('extension.js').matchAll(/^\s+\['(\w+)', '%?'\],$/gm))
+        used.add(m[1]);
+    const untranslated = [...used].filter(k => !PT_KEYS.includes(k) && k !== 'ctx');
+    eq(`${used.size} textos usados, todos traduzidos`, [], untranslated);
+}
 
 print('== SnapshotWatcher (diretório real temporário)');
 const root = GLib.dir_make_tmp('claude-status-XXXXXX');
