@@ -25,9 +25,11 @@ Você precisa do Claude Code, `git`, `bash` 3.2+ e `jq` 1.6+:
 Depois baixe o projeto e rode o instalador da sua área de trabalho:
 
 ```bash
-git clone https://github.com/Marcos-PauloR/claude-status-monitor.git
-cd claude-status-monitor
+git clone https://github.com/Marcos-PauloR/claude-status-monitor.git ~/.local/share/claude-status-monitor
+cd ~/.local/share/claude-status-monitor
 ```
+
+Não apague essa pasta: a extensão do GNOME roda a partir dela, e as atualizações chegam nela.
 
 | Área de trabalho | Comando | Depois de instalar |
 |---|---|---|
@@ -44,13 +46,14 @@ O instalador copia dois scripts pequenos para `~/.local/bin` e acrescenta uma `s
 ## Atualizar
 
 ```bash
-cd claude-status-monitor
-./install.sh --update
+cd ~/.local/share/claude-status-monitor && ./install.sh --update
 ```
 
 Isso baixa a versão nova (`git pull`) e reinstala o que você já tinha instalado. É o único momento em que o projeto acessa a internet, e só porque você pediu. No GNOME, saia e entre na sessão depois.
 
-> Instalou antes da v1.2? O seu `install.sh` ainda não conhece o `--update`. Rode `git pull` uma vez antes e depois `./install.sh --update`.
+> Clonou em outro lugar? Use essa pasta no lugar. O instalador mostra o comando exato de atualizar no fim de toda instalação.
+>
+> Instalou antes da v1.2? O seu `install.sh` ainda não conhece o `--update`. Rode `git pull` nessa pasta uma vez e depois `./install.sh --update`.
 
 ## Configuração
 
@@ -77,6 +80,7 @@ O waybar, o macOS e o terminal seguem esse arquivo. O GNOME e o KDE também têm
 Use o mesmo `--target` da instalação:
 
 ```bash
+cd ~/.local/share/claude-status-monitor
 ./install.sh --uninstall --target gnome    # ou: kde, waybar, macos
 ./install.sh --uninstall                   # se instalou só para o terminal
 ```

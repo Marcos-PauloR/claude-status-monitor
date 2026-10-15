@@ -25,9 +25,11 @@ You need Claude Code, `git`, `bash` 3.2+ and `jq` 1.6+:
 Then download the project and run the installer for your desktop:
 
 ```bash
-git clone https://github.com/Marcos-PauloR/claude-status-monitor.git
-cd claude-status-monitor
+git clone https://github.com/Marcos-PauloR/claude-status-monitor.git ~/.local/share/claude-status-monitor
+cd ~/.local/share/claude-status-monitor
 ```
+
+Keep this folder: the GNOME extension runs from it, and updates are pulled into it.
 
 | Desktop | Command | After installing |
 |---|---|---|
@@ -44,13 +46,14 @@ The installer copies two small scripts to `~/.local/bin` and adds a `statusLine`
 ## Update
 
 ```bash
-cd claude-status-monitor
-./install.sh --update
+cd ~/.local/share/claude-status-monitor && ./install.sh --update
 ```
 
 This downloads the new version (`git pull`) and reinstalls whatever you had installed. It's the only time the project goes online, and only because you asked it to. On GNOME, log out and back in afterwards.
 
-> Installed before v1.2? Your `install.sh` doesn't know `--update` yet. Run `git pull` once first, then `./install.sh --update`.
+> Cloned somewhere else? Use that folder instead. The installer prints the exact update command at the end of every install.
+>
+> Installed before v1.2? Your `install.sh` doesn't know `--update` yet. Run `git pull` in that folder once, then `./install.sh --update`.
 
 ## Settings
 
@@ -77,6 +80,7 @@ waybar, macOS and the terminal follow this file. GNOME and KDE also have their o
 Use the same `--target` you installed with:
 
 ```bash
+cd ~/.local/share/claude-status-monitor
 ./install.sh --uninstall --target gnome    # or: kde, waybar, macos
 ./install.sh --uninstall                   # terminal-only install
 ```

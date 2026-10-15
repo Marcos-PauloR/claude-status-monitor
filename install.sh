@@ -386,6 +386,7 @@ elif [ "$mode" = "install" ]; then
   write_config
   update_settings
   for t in ${targets[@]+"${targets[@]}"}; do "${t}_install"; done
+  echo "para atualizar depois: cd \"$HERE\" && ./install.sh --update"
 else
   for t in ${targets[@]+"${targets[@]}"}; do "${t}_uninstall"; done
   rm -f "$BRIDGE" "$SUMMARY"
