@@ -186,6 +186,16 @@ eq "SwiftBar: cor clara/escura" "✳ ctx 75% · session 31% · weekly 92% | colo
 reset
 snap a 10 "$(limits 10 10)"
 eq "título normal sem cor" "✳ ctx 10% · session 10% · weekly 10%" "$(sb | head -1)"
+sbo="$(SWIFTBAR=1 "$SUMMARY" --format swiftbar)"
+N="color=#1d1d1f,#f5f5f7"
+eq "SwiftBar: título da barra sem cor fixa" "✳ ctx 10% · session 10% · weekly 10%" "$(head -1 <<<"$sbo")"
+eq "SwiftBar: cota normal com cor de texto (não fica apagada)" "session  █░░░░░░░░░  10%  resets in 1h12 | font=Menlo size=12 $N" "$(sed -n 3p <<<"$sbo")"
+eq "SwiftBar: compacts da semana com cor de texto" "compacts this week: 0 | $N" "$(sed -n 5p <<<"$sbo")"
+eq "SwiftBar: título da janela com cor de texto" "proj-a | size=13 $N" "$(grep -m1 '^proj-a' <<<"$sbo")"
+eq "SwiftBar: ctx normal com cor de texto" "true" "$(grep -q "^ctx .* $N\$" <<<"$sbo" && echo true || echo false)"
+eq "SwiftBar: modelo mantém o cinza" "true" "$(grep -q '^Opus 5.5 · compacts 0 | size=11 color=#888888$' <<<"$sbo" && echo true || echo false)"
+eq "SwiftBar: ações sem cor" "Refresh | refresh=true" "$(tail -1 <<<"$sbo")"
+eq "xbar: linhas sem cor fixa" "0" "$(sb | grep -c '1d1d1f')"
 reset
 snap a 10 "$(limits 80 30 -1)"
 eq "reset passado" "session  ░░░░░░░░░░  0%  just reset | font=Menlo size=12" "$(sb | sed -n 3p)"
@@ -245,6 +255,9 @@ reset
 eq "vazio em pt" '["Claude —","nenhuma janela ativa"]' "$("$SUMMARY" --format waybar | jq -c '[.text, .tooltip]')"
 snap a 1
 eq "sem limits em pt" "true" "$("$SUMMARY" --format swiftbar | grep -q '^sessão  sem dados ainda$' && echo true || echo false)"
+eq "SwiftBar: sem dados com cor de texto" "true" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | grep -q '^sessão  sem dados ainda | color=#1d1d1f,#f5f5f7$' && echo true || echo false)"
+reset
+eq "SwiftBar: nenhuma janela com cor de texto" "nenhuma janela ativa | color=#1d1d1f,#f5f5f7" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | sed -n 3p)"
 rm -f "$CONF"
 
 echo "== robustez"

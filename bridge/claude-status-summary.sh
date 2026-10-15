@@ -117,10 +117,15 @@ exec jq -nrR \
   # SwiftBar/xbar: "|" separa parâmetros e "-" no início da linha vira submenu.
   def sbesc: tostring | gsub("\\|"; "¦") | sub("^-"; "‐");
   # Cores legíveis em barra clara; o SwiftBar aceita o par "clara,escura".
-  def sbcolor: [null, ["#b8860b", "#f6d32d"], ["#d63c25", "#ff7b63"]][level]
+  # No macOS, item de menu sem ação aparece apagado (cinza de desativado); cor explícita evita
+  # isso. Só no SwiftBar o nível 0 ganha a cor de texto normal: no xbar não há par clara/escura.
+  def sbcolor: [(if $swiftbar != "" then ["#1d1d1f", "#f5f5f7"] else null end),
+                ["#b8860b", "#f6d32d"], ["#d63c25", "#ff7b63"]][level]
     | if . == null then "" elif $swiftbar != "" then " color=\(.[0]),\(.[1])" else " color=\(.[0])" end;
+  # Parâmetros de uma linha de texto simples (vazio no xbar).
+  def sbplain: 0 | sbcolor | if . == "" then "" else " |" + . end;
   def sbquota($title): ($title | tr) as $name | ($name + "         " | .[0:9]) as $t
-    | if . == null then "\($name)  \("no data yet" | tr)"
+    | if . == null then "\($name)  \("no data yet" | tr)\(sbplain)"
       else "\($t)\(.pct | blocks | add)  \(.pct)%  \(when) | font=Menlo size=12\(.pct | sbcolor)" end;
   def pct: if . == null then "—" else "\(.)%" end;
   def quota_line($title): if . == null then "<b>\($title | tr)</b>  \("no data yet" | tr)"
@@ -185,7 +190,7 @@ exec jq -nrR \
       | tojson
     elif $format == "swiftbar" then
       ([ "---", "\("Open data folder" | tr) | bash=/usr/bin/open param1=\($base) terminal=false", "\("Refresh" | tr) | refresh=true" ]) as $footer
-      | if $s.empty then [ "✳ Claude —", "---", ("no active windows" | tr) ] + $footer | join("\n")
+      | if $s.empty then [ "✳ Claude —", "---", ("no active windows" | tr) + sbplain ] + $footer | join("\n")
         else [ ("✳ " + ([ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
                           (if $s.session != null then "\("session" | tr) \($s.session.pct)%" else empty end),
                           (if $s.weekly != null then "\("weekly" | tr) \($s.weekly.pct)%" else empty end)
@@ -194,9 +199,9 @@ exec jq -nrR \
                "---",
                ($s.session | sbquota("session")),
                ($s.weekly | sbquota("weekly")),
-               "\("compacts this week" | tr): \($s.week_compacts)",
+               "\("compacts this week" | tr): \($s.week_compacts)\(sbplain)",
                ($s.windows[] | "---",
-                 "\([.project // ("(no project)" | tr), .name] | map(select(. != null) | sbesc) | join(" — ")) | size=13",
+                 "\([.project // ("(no project)" | tr), .name] | map(select(. != null) | sbesc) | join(" — ")) | size=13\(0 | sbcolor)",
                  "\(.model // "—" | sbesc) · \("compacts" | tr) \(.compacts) | size=11 color=#888888",
                  "ctx  \(.ctx | blocks | add)  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens) | font=Menlo size=12\(.ctx | sbcolor)")
              ] + $footer | join("\n")
