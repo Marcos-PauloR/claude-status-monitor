@@ -10,7 +10,7 @@ Hoje a checagem é manual: `/usage` (89×) e `/context` (24×) no histórico. A 
 
 | Item | Valor |
 |---|---|
-| SO | Fedora 44 |
+| SO | Linux (desenvolvido e testado no Fedora 44) |
 | Desktop | GNOME Shell 50 (extensões em ESM — padrão desde o 45) |
 | Claude Code | 2.1.x (testado na 2.1.284) |
 | Linguagens | Bash + `jq` (ponte) · GJS/JavaScript ESM (extensão) |

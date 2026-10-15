@@ -5,7 +5,7 @@ Atualizado em 2026-10-14.
 | Task | Situação |
 |---|---|
 | T1 Ponte statusline | ✅ pronta — `bridge/test.sh` (60 ok) |
-| T2 Instalação da ponte | ✅ instalada — `./test-install.sh` (29 ok) |
+| T2 Instalação da ponte | ✅ pronta — `./test-install.sh` (29 ok) |
 | T3 Extensão: painel | ✅ pronta e validada na sessão real (cores testadas com snapshot falso 75%/95%) |
 | T4 Extensão: menu (dropdown por janela) | ✅ pronta e validada na sessão real |
 | T5 Preferências | ✅ pronta e validada na sessão real |
@@ -21,12 +21,6 @@ Atualizado em 2026-10-14.
 | T13 GNOME: preferências em abas + idioma + limiares por indicador | ✅ pronta — abas General/Indicators/About (arrastar para reordenar, liga/desliga, limiares próprios para ctx/session/weekly), PT/EN, cor por coluna; extensão 71 ok, instalador 69 ok; prefs renderizadas em container (EN e PT, 8 prints) e painel/menu no GNOME headless; **validada pelo usuário na sessão real** |
 | T14 KDE: idioma + config | ✅ pronta — plasmoid segue o config único (limiares, inatividade, idioma) e a tela de configuração sobrescreve ("do config" = 0/vazio; quem ajustou na v1.1 mantém o valor, pois o KConfig só grava o que mudou); resumidor JSON traz `lang`/`warn`/`crit`; versão 1.2 em todos os mostradores (GNOME: `version-name` no About); KDE 37 ok, resumidor 90 ok, demais suítes ok; plasmoidviewer em container: painel e popup em PT com cores dos limiares do config, tela de configuração renderizada (padrão e com valores próprios), sem erros de QML; **falta validar num KDE real** |
 | T15 `--update` + README PT/EN | ✅ pronta e validada pelo usuário (push em 2026-10-14) — `install.sh --update`: `git pull --ff-only`, mostra as novidades e roda o instalador **novo** com os alvos de `targets=` no config (gravado/atualizado a cada `--target`/`--uninstall --target`, editando só essa linha); sem `targets=` (v1.1) detecta o que está instalado; reinstala mesmo sem novidades (quem fez `git pull` à mão); falha de pull não reinstala nada. Instalador 85 ok (também no bash 3.2, com `--update` contra um repositório git real); `README.md` (EN) + `README.pt-BR.md`: link real, comando por plataforma, Atualizar, Configuração, Desinstalar explícito, glossário. **v1.2 concluída** |
-
-## Instalação atual da extensão
-
-- Symlink: `~/.local/share/gnome-shell/extensions/claude-status@marcospaulo` → `extension/`
-- Já incluída em `org.gnome.shell enabled-extensions`; carrega no próximo login (Wayland não recarrega o código da extensão sem sair da sessão).
-- Schema compilado em `extension/schemas/gschemas.compiled` (recompilar com `glib-compile-schemas extension/schemas` se mudar).
 
 ## T6 — Validação final (2026-10-14)
 
@@ -58,7 +52,3 @@ Atualizado em 2026-10-14.
 ```
 ./install.sh --uninstall --target gnome   # desativa e remove a extensão, a ponte e as entradas do settings.json
 ```
-
-## Retomar a conversa
-
-`cd claude-status-monitor && claude --continue`
