@@ -142,7 +142,7 @@ accent=#88c0d0
 | `bar` | as barras de progresso |
 | `accent` | nomes de conta e títulos |
 
-As cores são `#rgb` ou `#rrggbb`. Chave vazia usa a cor do texto do desktop; chave inválida cai na cor do tema `default`.
+As cores são `#rgb` ou `#rrggbb`. Chave ausente, vazia ou inválida usa o valor dessa chave no tema `default`; em `normal`, `label` e `accent` esse valor é vazio, ou seja, a cor do texto do desktop.
 
 Limites:
 
@@ -159,6 +159,14 @@ cd ~/.local/share/claude-status-monitor
 ./install.sh --uninstall --target gnome    # ou: kde, waybar, macos
 ./install.sh --uninstall                   # se instalou só para o terminal
 ```
+
+O `--uninstall` limpa só o `settings.json` da conta atual (`${CLAUDE_CONFIG_DIR:-~/.claude}`), mas remove a ponte compartilhada em `~/.local/bin`. Se você configurou contas extras, desinstale cada uma também (antes ou junto com a principal), senão elas continuariam chamando um script apagado:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-work ./install.sh --uninstall
+```
+
+Do mesmo modo, o `--update` refaz o merge só nas configurações da conta atual; as outras contas continuam funcionando porque o caminho da ponte é o mesmo.
 
 Isso remove o item do painel, os scripts e as entradas do `settings.json` (com backup). O `~/.config/claude-status/config` é mantido. Apague à mão se quiser.
 

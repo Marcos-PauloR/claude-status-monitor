@@ -142,7 +142,7 @@ accent=#88c0d0
 | `bar` | the progress bars |
 | `accent` | account names and headings |
 
-Colors are `#rgb` or `#rrggbb`. An empty key uses your desktop's text color; an invalid one falls back to the `default` theme's color.
+Colors are `#rgb` or `#rrggbb`. A missing, empty or invalid key takes that key's value from the `default` theme; for `normal`, `label` and `accent` that value is empty, which means your desktop's text color.
 
 Limits:
 
@@ -159,6 +159,14 @@ cd ~/.local/share/claude-status-monitor
 ./install.sh --uninstall --target gnome    # or: kde, waybar, macos
 ./install.sh --uninstall                   # terminal-only install
 ```
+
+`--uninstall` cleans only the `settings.json` of the current account (`${CLAUDE_CONFIG_DIR:-~/.claude}`), but it removes the shared bridge in `~/.local/bin`. If you set up extra accounts, uninstall each one too (before or along with the main one), or they would keep calling a deleted script:
+
+```bash
+CLAUDE_CONFIG_DIR=~/.claude-work ./install.sh --uninstall
+```
+
+Likewise, `--update` re-merges only the current account's settings; the other accounts keep working because the bridge path is the same.
 
 This removes the panel item, the scripts and the `settings.json` entries (with a backup). Your `~/.config/claude-status/config` is kept. Delete it by hand if you want.
 

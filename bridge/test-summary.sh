@@ -292,6 +292,14 @@ eq "tooltip: cabeçalho por conta" "true" "$(grep -q '^<b>default</b>$' <<<"$tip
 eq "waybar all" "Opus 5.5 · ctx 42% · default 31%/12% · work 78%/40%" "$("$SUMMARY" --format waybar --panel-accounts all | jq -r .text)"
 out="$("$SUMMARY" --format swiftbar)"
 eq "swiftbar: cabeçalho por conta" "true" "$(grep -q '^default | size=13' <<<"$out" && grep -q '^work | size=13' <<<"$out" && echo true || echo false)"
+conf 'account.default=R&D' 'account.work=a|b'
+eq "waybar (tema default): apelido escapado" "true" "$("$SUMMARY" --format waybar | jq -r .text | grep -q '^R&amp;D · ' && echo true || echo false)"
+eq "waybar all: apelido escapado" "true" "$("$SUMMARY" --format waybar --panel-accounts all | jq -r .text | grep -q 'R&amp;D 31%' && echo true || echo false)"
+conf 'account.default=a|b' 'account.work=x|y'
+eq "swiftbar: título com a¦b" "true" "$("$SUMMARY" --format swiftbar | head -1 | grep -q '^✳ a¦b · ' && echo true || echo false)"
+eq "swiftbar all: rótulos com ¦" "true" "$("$SUMMARY" --format swiftbar --panel-accounts all | head -1 | grep -q 'a¦b 31%/12% · x¦y' && echo true || echo false)"
+eq "texto mantém o apelido cru" "true" "$(text | grep -q '^a|b · ' && echo true || echo false)"
+rm -f "$CONF"
 
 reset
 snap d1 10

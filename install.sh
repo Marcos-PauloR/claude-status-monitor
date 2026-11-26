@@ -17,7 +17,7 @@
 #
 # Sempre: copia a ponte e o resumidor (bridge/claude-status-{bridge,summary}.sh) para
 # ~/.local/bin e faz merge de statusLine e dos hooks PreCompact/SessionEnd em
-# ~/.claude/settings.json, com backup (settings.json.bak-AAAAMMDD-HHMMSS) antes de alterar.
+# ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json, com backup (settings.json.bak-AAAAMMDD-HHMMSS) antes de alterar.
 #
 # Alvos (mostrador de cada plataforma; pode repetir --target):
 #   gnome   compila o schema, cria o symlink da extensão e a ativa

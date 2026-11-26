@@ -291,6 +291,9 @@ out="$(jq -nrR \
   | [ if $s.multi and $panel == "focus" then ($names[$fa] // $fa) else empty end ] as $prefix
   | ([ $s.model, (if $s.ctx != null then "ctx \($s.ctx)%" else empty end) ]
      + [ $s.accounts[] | "\(.label) \(.session.pct | pct)/\(.weekly.pct | pct)" ] | join(" · ")) as $all_text
+  | ([ $prefix[] | sbesc ]) as $sbprefix
+  | ([ $s.model, (if $s.ctx != null then "ctx \($s.ctx)%" else empty end) ]
+     + [ $s.accounts[] | "\(.label | sbesc) \(.session.pct | pct)/\(.weekly.pct | pct)" ] | join(" · ")) as $sb_all_text
   | if $format == "pin-next" then
       ([ $s.windows | sort_by([(if .account == "default" then 0 else 1 end), .account])[] | .id | sid ]) as $order
       | ($order | index($pinned)) as $i
@@ -308,7 +311,7 @@ out="$(jq -nrR \
                          (if $s.weekly != null then "\("weekly" | tr) \($s.weekly.pct)%" else empty end)
                        ] | if length == 0 then $s.model else join(" · ") end
                   end)
-                 | if $theme_id == "default" then .
+                 | if $theme_id == "default" then esc
                    else esc | paint([$theme.normal, $theme.warn, $theme.crit][$s.level]) end),
           tooltip: ([ $s.accounts | to_entries[] | .key as $k | .value
                       | (if $k > 0 then "" else empty end),
@@ -329,8 +332,8 @@ out="$(jq -nrR \
     elif $format == "swiftbar" then
       ([ "---", "\("Open data folder" | tr) | bash=/usr/bin/open param1=\($base) terminal=false", "\("Refresh" | tr) | refresh=true" ]) as $footer
       | if $s.empty then [ "✳ Claude —", "---", ("no active windows" | tr) + sbplain ] + $footer | join("\n")
-        else [ ("✳ " + (if $panel == "all" then $all_text
-                        else $prefix + [ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
+        else [ ("✳ " + (if $panel == "all" then $sb_all_text
+                        else $sbprefix + [ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
                                (if $s.session != null then "\("session" | tr) \($s.session.pct)%" else empty end),
                                (if $s.weekly != null then "\("weekly" | tr) \($s.weekly.pct)%" else empty end)
                              ] | if length == 0 then $s.model else join(" · ") end
