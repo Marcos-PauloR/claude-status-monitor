@@ -20,6 +20,8 @@ PlasmoidItem {
 
     property var summary: null
     property string error: ""
+    // Erro do último Fixar/Desafixar: fica no popup até o próximo clique (a atualização não apaga).
+    property string pinError: ""
 
     readonly property var cfg: Plasmoid.configuration
     // O plasmashell nem sempre tem ~/.local/bin no PATH; o motor "executable" roda via shell.
@@ -29,15 +31,14 @@ PlasmoidItem {
 
     readonly property var theme: summary && summary.theme ? summary.theme : null
 
-    // Cores do tema do resumidor; cor vazia (ou sem resumo) = cores do desktop.
+    // Cores do tema do resumidor. Tema default (ou sem resumo) = cores do Plasma, como na v1.2;
+    // nos outros temas, cor vazia = cor do texto do desktop.
     function levelColor(level) {
-        const fallback = level >= 2 ? Kirigami.Theme.negativeTextColor
-            : level === 1 ? Kirigami.Theme.neutralTextColor
-            : Kirigami.Theme.textColor;
-        return Fmt.levelColor(theme, level, fallback);
+        return Fmt.levelColor(theme, level,
+            [Kirigami.Theme.textColor, Kirigami.Theme.neutralTextColor, Kirigami.Theme.negativeTextColor]);
     }
     function themeColor(key, fallback) {
-        return theme && theme[key] ? theme[key] : fallback;
+        return Fmt.themed(theme, key) || fallback;
     }
     function tr(text) {
         return Fmt.tr(lang, text);
@@ -71,12 +72,15 @@ PlasmoidItem {
         engine: "executable"
         onNewData: (source, data) => {
             disconnectSource(source);
-            if (data["exit code"] !== 0)
-                root.error = (data.stderr || "claude-status-summary.sh failed").trim();
+            if (data["exit code"] !== 0) {
+                root.pinError = (data.stderr || "claude-status-summary.sh failed").trim();
+                console.warn("claude-status: " + source + ": " + root.pinError);
+            }
             exec.connectSource(root.command);
         }
     }
     function togglePin(w) {
+        pinError = "";
         pinExec.connectSource('PATH="$HOME/.local/bin:$PATH" ' + Fmt.pinCommand(w));
     }
 
@@ -118,6 +122,26 @@ PlasmoidItem {
         Layout.minimumHeight: implicitHeight
         spacing: Kirigami.Units.smallSpacing
 
+        // Barra com a cor do tema (bar / warn / crit); no tema default fica a do Breeze.
+        // O estilo do Plasma desenha a barra com SVG e ignora palette.highlight: com cor de tema,
+        // um retângulo cobre o preenchimento.
+        component ThemedBar: PlasmaComponents.ProgressBar {
+            id: themedBar
+            property int level: 0
+            readonly property string tint: Fmt.barColor(root.theme, level)
+            from: 0; to: 100
+            Rectangle {
+                visible: !!themedBar.tint && themedBar.visualPosition > 0 && !!themedBar.contentItem
+                z: 10
+                x: themedBar.contentItem ? themedBar.contentItem.x : 0
+                y: themedBar.contentItem ? themedBar.contentItem.y : 0
+                height: themedBar.contentItem ? themedBar.contentItem.height : 0
+                width: themedBar.contentItem ? Math.max(height, themedBar.contentItem.width * themedBar.visualPosition) : 0
+                radius: height / 2
+                color: themedBar.tint || "transparent"
+            }
+        }
+
         component QuotaRow: RowLayout {
             property string title
             property var quota
@@ -129,10 +153,10 @@ PlasmoidItem {
                 opacity: root.themeColor("label", "") ? 1 : 0.75
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 4
             }
-            PlasmaComponents.ProgressBar {
+            ThemedBar {
                 Layout.fillWidth: true
-                from: 0; to: 100
                 value: parent.quota ? parent.quota.pct : 0
+                level: Fmt.level(parent.quota ? parent.quota.pct : null, root.summary)
                 visible: !!parent.quota
             }
             PlasmaComponents.Label {
@@ -148,6 +172,13 @@ PlasmoidItem {
         PlasmaComponents.Label {
             visible: !!root.error
             text: root.error
+            color: Kirigami.Theme.negativeTextColor
+            wrapMode: Text.Wrap
+            Layout.fillWidth: true
+        }
+        PlasmaComponents.Label {
+            visible: !!root.pinError
+            text: root.pinError
             color: Kirigami.Theme.negativeTextColor
             wrapMode: Text.Wrap
             Layout.fillWidth: true
@@ -179,7 +210,8 @@ PlasmoidItem {
                         visible: !!root.summary.multi
                         level: 5
                         text: account.modelData.label
-                        color: root.themeColor("accent", Kirigami.Theme.highlightColor)
+                        color: root.themeColor("accent", Kirigami.Theme.textColor)
+                        font.weight: Font.Bold
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                     }
@@ -187,7 +219,8 @@ PlasmoidItem {
                     QuotaRow { title: root.tr("weekly"); quota: account.modelData.weekly }
                     PlasmaComponents.Label {
                         text: root.tr("compacts this week") + ": " + (account.modelData.week_compacts || 0)
-                        opacity: 0.75
+                        color: root.themeColor("label", Kirigami.Theme.textColor)
+                        opacity: root.themeColor("label", "") ? 1 : 0.75
                     }
 
                     Repeater {
@@ -222,7 +255,8 @@ PlasmoidItem {
                             }
                             PlasmaComponents.Label {
                                 text: (modelData.model || "—") + " · " + root.tr("compacts") + " " + modelData.compacts
-                                opacity: 0.65
+                                color: root.themeColor("label", Kirigami.Theme.textColor)
+                                opacity: root.themeColor("label", "") ? 1 : 0.65
                             }
                             RowLayout {
                                 Layout.fillWidth: true
@@ -233,10 +267,10 @@ PlasmoidItem {
                                     opacity: root.themeColor("label", "") ? 1 : 0.75
                                     Layout.preferredWidth: Kirigami.Units.gridUnit * 4
                                 }
-                                PlasmaComponents.ProgressBar {
+                                ThemedBar {
                                     Layout.fillWidth: true
-                                    from: 0; to: 100
                                     value: modelData.ctx || 0
+                                    level: modelData.level || 0
                                 }
                                 PlasmaComponents.Label {
                                     text: Fmt.pct(modelData.ctx) + "  " + Fmt.tokens(modelData.tokens) + " / " + Fmt.tokens(modelData.window)

@@ -6,7 +6,7 @@ import System from 'system';
 const path = GLib.build_filenamev([GLib.path_get_dirname(import.meta.url.replace('file://', '')),
     'org.claudestatus.monitor', 'contents', 'ui', 'format.js']);
 const src = new TextDecoder().decode(GLib.file_get_contents(path)[1]).replace(/^\.pragma library\s*$/m, '');
-const F = new Function(`${src}; return {duration, tokens, pct, panelText, windowTitle, quotaDetail, tr, fallbackLang, summaryArgs, level, levelColor, pinCommand, accountLabel};`)();
+const F = new Function(`${src}; return {duration, tokens, pct, panelText, windowTitle, quotaDetail, tr, fallbackLang, summaryArgs, level, levelColor, pinCommand, accountLabel, barColor, themed};`)();
 
 let pass = 0, fail = 0;
 function eq(desc, expected, actual) {
@@ -97,6 +97,21 @@ eq('comando de desafixar', 'claude-status-summary.sh --unpin', F.pinCommand({id:
 eq('id inseguro saneado no comando', 'claude-status-summary.sh --pin a__b', F.pinCommand({id: 'a;"b', pinned: false}));
 eq('tr pt fixar', 'Fixar no painel', F.tr('pt', 'Pin to panel'));
 eq('tr pt desafixar', 'Desafixar', F.tr('pt', 'Unpin'));
+
+print('== v1.3 revisão: tema default = cores da v1.2');
+const kde = ['#text', '#neutral', '#negative'];
+const dflt = {id: 'default', normal: '', warn: '#f6d32d', crit: '#ff7b63', label: '', bar: '#78aeed', accent: ''};
+eq('default: cores do Kirigami', kde, [0, 1, 2].map(l => F.levelColor(dflt, l, kde)));
+eq('sem tema: cores do Kirigami', kde, [0, 1, 2].map(l => F.levelColor(null, l, kde)));
+eq('nord: cores do tema', ['#d8dee9', '#ebcb8b', '#bf616a'], [0, 1, 2].map(l => F.levelColor(theme, l, kde)));
+eq('chave vazia em tema não-default: cor do texto', '#text', F.levelColor({...theme, warn: ''}, 1, kde));
+eq('barra: default mantém o Breeze', ['', '', ''], [0, 1, 2].map(l => F.barColor(dflt, l)));
+eq('barra: sem tema mantém o Breeze', '', F.barColor(null, 0));
+eq('barra: nord usa bar/warn/crit', ['#5e81ac', '#ebcb8b', '#bf616a'], [0, 1, 2].map(l => F.barColor(theme, l)));
+eq('barra: bar vazio cai no Breeze', '', F.barColor({...theme, bar: ''}, 0));
+eq('cor de rótulo: nord', '#81a1c1', F.themed(theme, 'label'));
+eq('cor de rótulo: default não pinta', '', F.themed({...dflt, label: '#123456'}, 'label'));
+eq('cor de rótulo: vazia não pinta', '', F.themed({...theme, accent: ''}, 'accent'));
 
 print(`\nResultado: ${pass} ok, ${fail} falha(s)`);
 System.exit(fail ? 1 : 0);

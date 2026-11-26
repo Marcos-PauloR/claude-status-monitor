@@ -62,11 +62,28 @@ function summaryArgs(cfg) {
     return args.join(" ");
 }
 
-// Cor de um nível (0/1/2) no tema do resumo; cor vazia ou sem tema = cor do texto do desktop.
-function levelColor(theme, level, textColor) {
-    if (!theme)
-        return textColor;
-    return [theme.normal, theme.warn, theme.crit][level] || textColor;
+// O tema "default" (ou resumo sem tema) mantém a aparência da v1.2: cores do Plasma, sem pintar.
+function customTheme(theme) {
+    return !!theme && theme.id !== "default";
+}
+
+// Cor de um tema que não seja o default; "" = não pinta (usa a do desktop).
+function themed(theme, key) {
+    return customTheme(theme) && theme[key] ? theme[key] : "";
+}
+
+// Cor de um nível (0/1/2). fallback = [texto, neutral, negative] do Kirigami (ou só a cor do texto).
+// Tema default/sem tema: as cores do Kirigami da v1.2; outro tema: as dele, vazia = cor do texto.
+function levelColor(theme, level, fallback) {
+    const fb = Array.isArray(fallback) ? fallback : [fallback, fallback, fallback];
+    if (!customTheme(theme))
+        return fb[level] || fb[0];
+    return [theme.normal, theme.warn, theme.crit][level] || fb[0];
+}
+
+// Cor da barra: bar no nível 0, warn/crit nos níveis 1/2; "" (default ou vazia) = barra do Breeze.
+function barColor(theme, level) {
+    return themed(theme, ["bar", "warn", "crit"][level] || "bar");
 }
 
 // Comando de fixar/desafixar uma janela (o resumidor grava/apaga ~/.cache/claude-status/pinned).
