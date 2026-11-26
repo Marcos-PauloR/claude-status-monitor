@@ -6,7 +6,7 @@ import System from 'system';
 const path = GLib.build_filenamev([GLib.path_get_dirname(import.meta.url.replace('file://', '')),
     'org.claudestatus.monitor', 'contents', 'ui', 'format.js']);
 const src = new TextDecoder().decode(GLib.file_get_contents(path)[1]).replace(/^\.pragma library\s*$/m, '');
-const F = new Function(`${src}; return {duration, tokens, pct, panelText, windowTitle, quotaDetail, tr, fallbackLang, summaryArgs, level};`)();
+const F = new Function(`${src}; return {duration, tokens, pct, panelText, windowTitle, quotaDetail, tr, fallbackLang, summaryArgs, level, levelColor, pinCommand, accountLabel};`)();
 
 let pass = 0, fail = 0;
 function eq(desc, expected, actual) {
@@ -64,6 +64,39 @@ eq('idioma inválido ignorado', '--format json', F.summaryArgs(cfg({language: 'x
 eq('nível com limiares do resumo', [0, 1, 2], [40, 50, 60].map(p => F.level(p, {warn: 50, crit: 60})));
 eq('nível sem resumo: 70/90', [0, 1, 2], [69, 70, 90].map(p => F.level(p, null)));
 eq('nível sem número', 0, F.level(null, {warn: 1, crit: 2}));
+
+print('== v1.3');
+const theme = {id: 'nord', normal: '#d8dee9', warn: '#ebcb8b', crit: '#bf616a', label: '#81a1c1', bar: '#5e81ac', accent: '#88c0d0'};
+const base = {empty: false, model: 'Opus 5.5', ctx: 42, compacts: 2, lang: 'en', theme,
+    session: {pct: 31, resets_in: 4320, reset: false}, weekly: {pct: 12, resets_in: 1, reset: false},
+    focus: {id: 'd1', account: 'default'}, multi: true, panel_accounts: 'focus',
+    accounts: [{id: 'default', label: 'default', session: {pct: 31}, weekly: {pct: 12}},
+               {id: 'work', label: 'Trabalho', session: {pct: 78}, weekly: {pct: 40}}]};
+// O painel do KDE segue o texto da v1.2 (sem modelo/compacts, como o waybar); o apelido entra na frente.
+eq('focus com várias contas: apelido primeiro', 'default · ctx 42% · session 31% · resets 1h12 · weekly 12%', F.panelText(base));
+eq('focus: apelido da conta em foco', 'Trabalho · ctx 42% · session 31% · resets 1h12 · weekly 12%',
+    F.panelText({...base, focus: {id: 'w1', account: 'work'}}));
+eq('all', 'Opus 5.5 · ctx 42% · default 31%/12% · Trabalho 78%/40%', F.panelText({...base, panel_accounts: 'all'}));
+eq('all: cota ausente vira —', 'Opus 5.5 · ctx 42% · default 31%/12% · Trabalho —/—',
+    F.panelText({...base, panel_accounts: 'all', accounts: [base.accounts[0], {id: 'work', label: 'Trabalho', session: null, weekly: null}]}));
+eq('uma conta: igual à v1.2', 'ctx 42% · session 31% · resets 1h12 · weekly 12%',
+    F.panelText({...base, multi: false, accounts: [base.accounts[0]]}));
+eq('uma conta em all: igual à v1.2', 'ctx 42% · session 31% · resets 1h12 · weekly 12%',
+    F.panelText({...base, multi: false, panel_accounts: 'all', accounts: [base.accounts[0]]}));
+eq('vazio continua vazio em all', 'Claude —', F.panelText({empty: true, multi: true, panel_accounts: 'all', accounts: []}));
+eq('rótulo da conta', 'Trabalho', F.accountLabel({...base, focus: {account: 'work'}}));
+eq('args: tema e contas da configuração', '--format json --theme nord --panel-accounts all',
+    F.summaryArgs({warnThreshold: 0, critThreshold: 0, inactiveMinutes: 0, language: '', theme: 'nord', panelAccounts: 'all'}));
+eq('args: vazio segue o config', '--format json', F.summaryArgs({warnThreshold: 0, critThreshold: 0, inactiveMinutes: 0, language: '', theme: '', panelAccounts: ''}));
+eq('args: tema inseguro ignorado', '--format json', F.summaryArgs(cfg({theme: 'a;b', panelAccounts: 'x'})));
+eq('cor do nível vem do tema', ['#d8dee9', '#ebcb8b', '#bf616a'], [0, 1, 2].map(l => F.levelColor(theme, l, '#ffffff')));
+eq('cor vazia usa a do texto', '#ffffff', F.levelColor({...theme, normal: ''}, 0, '#ffffff'));
+eq('sem tema usa a do texto', '#ffffff', F.levelColor(null, 2, '#ffffff'));
+eq('comando de fixar', 'claude-status-summary.sh --pin d1', F.pinCommand({id: 'd1', pinned: false}));
+eq('comando de desafixar', 'claude-status-summary.sh --unpin', F.pinCommand({id: 'd1', pinned: true}));
+eq('id inseguro saneado no comando', 'claude-status-summary.sh --pin a__b', F.pinCommand({id: 'a;"b', pinned: false}));
+eq('tr pt fixar', 'Fixar no painel', F.tr('pt', 'Pin to panel'));
+eq('tr pt desafixar', 'Desafixar', F.tr('pt', 'Unpin'));
 
 print(`\nResultado: ${pass} ok, ${fail} falha(s)`);
 System.exit(fail ? 1 : 0);

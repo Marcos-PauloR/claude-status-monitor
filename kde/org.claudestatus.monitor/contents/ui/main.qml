@@ -1,9 +1,11 @@
 // Claude Status Monitor — plasmoid do KDE Plasma 6.
 // Roda claude-status-summary.sh --format json a cada N segundos (mesmas regras do painel do GNOME).
-// Limiares, inatividade e idioma vêm do config único, a não ser que tenham sido mudados aqui.
+// Limiares, inatividade, idioma, tema e contas no painel vêm do config único, a não ser que
+// tenham sido mudados aqui. O popup tem uma seção por conta e o botão de fixar a janela do painel.
 
 import QtCore
 import QtQuick
+import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.components as PlasmaComponents
@@ -25,10 +27,17 @@ PlasmoidItem {
     readonly property string lang: summary && summary.lang ? summary.lang : Fmt.fallbackLang(cfg.language, Qt.locale().name)
     readonly property string dataDir: StandardPaths.writableLocation(StandardPaths.GenericCacheLocation) + "/claude-status"
 
+    readonly property var theme: summary && summary.theme ? summary.theme : null
+
+    // Cores do tema do resumidor; cor vazia (ou sem resumo) = cores do desktop.
     function levelColor(level) {
-        return level >= 2 ? Kirigami.Theme.negativeTextColor
+        const fallback = level >= 2 ? Kirigami.Theme.negativeTextColor
             : level === 1 ? Kirigami.Theme.neutralTextColor
             : Kirigami.Theme.textColor;
+        return Fmt.levelColor(theme, level, fallback);
+    }
+    function themeColor(key, fallback) {
+        return theme && theme[key] ? theme[key] : fallback;
     }
     function tr(text) {
         return Fmt.tr(lang, text);
@@ -54,6 +63,21 @@ PlasmoidItem {
                 root.error = "invalid output: " + e;
             }
         }
+    }
+
+    // Fixar/desafixar: roda o resumidor e atualiza na hora.
+    Plasma5Support.DataSource {
+        id: pinExec
+        engine: "executable"
+        onNewData: (source, data) => {
+            disconnectSource(source);
+            if (data["exit code"] !== 0)
+                root.error = (data.stderr || "claude-status-summary.sh failed").trim();
+            exec.connectSource(root.command);
+        }
+    }
+    function togglePin(w) {
+        pinExec.connectSource('PATH="$HOME/.local/bin:$PATH" ' + Fmt.pinCommand(w));
     }
 
     Timer {
@@ -101,7 +125,8 @@ PlasmoidItem {
             spacing: Kirigami.Units.largeSpacing
             PlasmaComponents.Label {
                 text: parent.title
-                opacity: 0.75
+                color: root.themeColor("label", Kirigami.Theme.textColor)
+                opacity: root.themeColor("label", "") ? 1 : 0.75
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 4
             }
             PlasmaComponents.ProgressBar {
@@ -138,48 +163,86 @@ PlasmoidItem {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
-            QuotaRow { title: root.tr("session"); quota: root.summary ? root.summary.session : null }
-            QuotaRow { title: root.tr("weekly"); quota: root.summary ? root.summary.weekly : null }
-            PlasmaComponents.Label {
-                text: root.tr("compacts this week") + ": " + (root.summary ? root.summary.week_compacts : 0)
-                opacity: 0.75
-            }
-
+            // Uma seção por conta; com uma conta só, sem cabeçalho (igual à v1.2).
             Repeater {
-                model: root.summary ? root.summary.windows : []
+                model: root.summary && root.summary.accounts ? root.summary.accounts : []
                 delegate: ColumnLayout {
+                    id: account
                     required property var modelData
+                    required property int index
                     Layout.fillWidth: true
-                    Layout.topMargin: Kirigami.Units.smallSpacing
-                    spacing: 0
+                    Layout.topMargin: index > 0 ? Kirigami.Units.largeSpacing : 0
+                    spacing: Kirigami.Units.smallSpacing
 
-                    Kirigami.Separator { Layout.fillWidth: true; Layout.bottomMargin: Kirigami.Units.smallSpacing }
-                    PlasmaComponents.Label {
-                        text: Fmt.windowTitle(modelData, root.lang)
-                        font.bold: true
+                    Kirigami.Separator { visible: account.index > 0; Layout.fillWidth: true }
+                    Kirigami.Heading {
+                        visible: !!root.summary.multi
+                        level: 5
+                        text: account.modelData.label
+                        color: root.themeColor("accent", Kirigami.Theme.highlightColor)
+                        Layout.fillWidth: true
                         elide: Text.ElideRight
-                        Layout.fillWidth: true
                     }
+                    QuotaRow { title: root.tr("session"); quota: account.modelData.session }
+                    QuotaRow { title: root.tr("weekly"); quota: account.modelData.weekly }
                     PlasmaComponents.Label {
-                        text: (modelData.model || "—") + " · " + root.tr("compacts") + " " + modelData.compacts
-                        opacity: 0.65
+                        text: root.tr("compacts this week") + ": " + (account.modelData.week_compacts || 0)
+                        opacity: 0.75
                     }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Kirigami.Units.largeSpacing
-                        PlasmaComponents.Label {
-                            text: "ctx"
-                            opacity: 0.75
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                        }
-                        PlasmaComponents.ProgressBar {
+
+                    Repeater {
+                        model: account.modelData.windows || []
+                        delegate: ColumnLayout {
+                            required property var modelData
                             Layout.fillWidth: true
-                            from: 0; to: 100
-                            value: modelData.ctx || 0
-                        }
-                        PlasmaComponents.Label {
-                            text: Fmt.pct(modelData.ctx) + "  " + Fmt.tokens(modelData.tokens) + " / " + Fmt.tokens(modelData.window)
-                            color: root.levelColor(modelData.level)
+                            Layout.topMargin: Kirigami.Units.smallSpacing
+                            spacing: 0
+
+                            Kirigami.Separator { Layout.fillWidth: true; Layout.bottomMargin: Kirigami.Units.smallSpacing; opacity: 0.5 }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+                                PlasmaComponents.Label {
+                                    text: Fmt.windowTitle(modelData, root.lang)
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                    color: modelData.pinned ? root.themeColor("accent", Kirigami.Theme.textColor) : Kirigami.Theme.textColor
+                                    Layout.fillWidth: true
+                                }
+                                PlasmaComponents.ToolButton {
+                                    icon.name: "window-pin"  // o do Breeze (view-pin-symbolic é do Adwaita)
+                                    checked: !!modelData.pinned
+                                    display: QQC2.AbstractButton.IconOnly
+                                    text: root.tr(modelData.pinned ? "Unpin" : "Pin to panel")
+                                    QQC2.ToolTip.text: text
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                                    onClicked: root.togglePin(modelData)
+                                }
+                            }
+                            PlasmaComponents.Label {
+                                text: (modelData.model || "—") + " · " + root.tr("compacts") + " " + modelData.compacts
+                                opacity: 0.65
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.largeSpacing
+                                PlasmaComponents.Label {
+                                    text: "ctx"
+                                    color: root.themeColor("label", Kirigami.Theme.textColor)
+                                    opacity: root.themeColor("label", "") ? 1 : 0.75
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                                }
+                                PlasmaComponents.ProgressBar {
+                                    Layout.fillWidth: true
+                                    from: 0; to: 100
+                                    value: modelData.ctx || 0
+                                }
+                                PlasmaComponents.Label {
+                                    text: Fmt.pct(modelData.ctx) + "  " + Fmt.tokens(modelData.tokens) + " / " + Fmt.tokens(modelData.window)
+                                    color: root.levelColor(modelData.level)
+                                }
+                            }
                         }
                     }
                 }

@@ -3,6 +3,7 @@ import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
 import org.kde.kcmutils as KCM
+import org.kde.plasma.plasma5support as Plasma5Support
 
 import "format.js" as Fmt
 
@@ -14,6 +15,24 @@ KCM.SimpleKCM {
     property alias cfg_inactiveMinutes: inactive.value
     property alias cfg_intervalSeconds: interval.value
     property string cfg_language
+    property string cfg_theme
+    property string cfg_panelAccounts
+
+    // Temas disponíveis (embutidos + da pessoa), lidos do resumidor ao abrir a tela.
+    property var themes: []
+    Plasma5Support.DataSource {
+        engine: "executable"
+        connectedSources: ['PATH="$HOME/.local/bin:$PATH" claude-status-summary.sh --list-themes']
+        onNewData: (source, data) => {
+            disconnectSource(source);
+            try {
+                if (data["exit code"] === 0)
+                    page.themes = JSON.parse(data.stdout);
+            } catch (e) {
+                console.warn("claude-status: --list-themes inválido: " + e);
+            }
+        }
+    }
 
     readonly property string lang: Fmt.fallbackLang(cfg_language, Qt.locale().name)
     function tr(text) {
@@ -52,6 +71,31 @@ KCM.SimpleKCM {
             currentIndex: Math.max(0, values.indexOf(page.cfg_language))
             onActivated: index => page.cfg_language = values[index]
         }
+        QQC2.ComboBox {
+            Kirigami.FormData.label: page.tr("Theme:")
+            // Tema salvo que não está na lista (apagado?) continua aparecendo para não sumir calado.
+            readonly property var values: {
+                const ids = [""].concat(page.themes.map(t => t.id));
+                if (page.cfg_theme && ids.indexOf(page.cfg_theme) < 0)
+                    ids.push(page.cfg_theme);
+                return ids;
+            }
+            model: values.map(id => {
+                if (id === "")
+                    return page.tr("from config");
+                const t = page.themes.find(x => x.id === id);
+                return t ? t.name : id;
+            })
+            currentIndex: Math.max(0, values.indexOf(page.cfg_theme))
+            onActivated: index => page.cfg_theme = values[index]
+        }
+        QQC2.ComboBox {
+            Kirigami.FormData.label: page.tr("Accounts in panel:")
+            readonly property var values: ["", "focus", "all"]
+            model: [page.tr("from config"), page.tr("Account of the focused window"), page.tr("All accounts")]
+            currentIndex: Math.max(0, values.indexOf(page.cfg_panelAccounts))
+            onActivated: index => page.cfg_panelAccounts = values[index]
+        }
         QQC2.SpinBox {
             id: interval
             Kirigami.FormData.label: page.tr("Refresh every (seconds):")
@@ -59,7 +103,7 @@ KCM.SimpleKCM {
         }
         QQC2.Label {
             Layout.maximumWidth: Kirigami.Units.gridUnit * 22
-            text: page.tr("Values shown as \"from config\" follow ~/.config/claude-status/config (install.sh --warn, --crit, --inactive, --lang).")
+            text: page.tr("Values shown as \"from config\" follow ~/.config/claude-status/config (install.sh --warn, --crit, --inactive, --lang, --theme, --panel-accounts).")
             wrapMode: Text.Wrap
             opacity: 0.7
         }

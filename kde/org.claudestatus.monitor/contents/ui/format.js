@@ -15,6 +15,9 @@ const PT = {
     "no active windows": "nenhuma janela ativa",
     "(no project)": "(sem projeto)",
     "Open data folder": "Abrir pasta de dados",
+    "Pin to panel": "Fixar no painel",
+    "Unpin": "Desafixar",
+    "account": "conta",
     // configuração
     "Yellow from (%):": "Amarelo a partir de (%):",
     "Red from (%):": "Vermelho a partir de (%):",
@@ -22,8 +25,12 @@ const PT = {
     "Refresh every (seconds):": "Atualizar a cada (segundos):",
     "Language:": "Idioma:",
     "from config": "do config",
-    "Values shown as \"from config\" follow ~/.config/claude-status/config (install.sh --warn, --crit, --inactive, --lang).":
-        "Os valores \"do config\" seguem ~/.config/claude-status/config (install.sh --warn, --crit, --inactive, --lang).",
+    "Theme:": "Tema:",
+    "Accounts in panel:": "Contas no painel:",
+    "Account of the focused window": "Conta da janela em foco",
+    "All accounts": "Todas as contas",
+    "Values shown as \"from config\" follow ~/.config/claude-status/config (install.sh --warn, --crit, --inactive, --lang, --theme, --panel-accounts).":
+        "Os valores \"do config\" seguem ~/.config/claude-status/config (install.sh --warn, --crit, --inactive, --lang, --theme, --panel-accounts).",
 };
 
 function tr(lang, text) {
@@ -48,7 +55,32 @@ function summaryArgs(cfg) {
         args.push("--inactive", cfg.inactiveMinutes);
     if (cfg.language === "en" || cfg.language === "pt")
         args.push("--lang", cfg.language);
+    if (/^[A-Za-z0-9_-]+$/.test(cfg.theme || ""))
+        args.push("--theme", cfg.theme);
+    if (cfg.panelAccounts === "focus" || cfg.panelAccounts === "all")
+        args.push("--panel-accounts", cfg.panelAccounts);
     return args.join(" ");
+}
+
+// Cor de um nível (0/1/2) no tema do resumo; cor vazia ou sem tema = cor do texto do desktop.
+function levelColor(theme, level, textColor) {
+    if (!theme)
+        return textColor;
+    return [theme.normal, theme.warn, theme.crit][level] || textColor;
+}
+
+// Comando de fixar/desafixar uma janela (o resumidor grava/apaga ~/.cache/claude-status/pinned).
+function pinCommand(w) {
+    if (w.pinned)
+        return "claude-status-summary.sh --unpin";
+    return "claude-status-summary.sh --pin " + String(w.id || "").replace(/[^A-Za-z0-9_-]/g, "_");
+}
+
+// Apelido da conta da janela em foco (o resumidor já resolve account.<id> do config).
+function accountLabel(s) {
+    const id = s && s.focus && s.focus.account ? s.focus.account : "default";
+    const a = (s && s.accounts || []).find(x => x.id === id);
+    return a && a.label ? a.label : id;
 }
 
 // Nível de cor de uma porcentagem com os limiares do resumo (padrão 70/90).
@@ -87,10 +119,20 @@ function pct(v) {
 }
 
 // Texto do painel: ctx · session · resets · weekly (os que existirem), no idioma do resumo.
+// Com mais de uma conta: em "focus" o apelido da conta vem primeiro; em "all" é o mesmo texto do
+// resumidor (model · ctx · <apelido> session%/weekly% por conta).
 function panelText(s) {
     if (!s || s.empty)
         return "Claude —";
-    const parts = [];
+    if (s.multi && s.panel_accounts === "all") {
+        const all = [s.model || "Claude"];
+        if (typeof s.ctx === "number")
+            all.push("ctx " + s.ctx + "%");
+        for (const a of s.accounts || [])
+            all.push(a.label + " " + pct(a.session && a.session.pct) + "/" + pct(a.weekly && a.weekly.pct));
+        return all.join(" · ");
+    }
+    const parts = s.multi ? [accountLabel(s)] : [];
     if (typeof s.ctx === "number")
         parts.push("ctx " + s.ctx + "%");
     if (s.session) {
@@ -99,6 +141,8 @@ function panelText(s) {
     }
     if (s.weekly)
         parts.push(tr(s.lang, "weekly") + " " + s.weekly.pct + "%");
+    if (s.multi && parts.length === 1)
+        parts.push(s.model || "Claude");
     return parts.length ? parts.join(" · ") : (s.model || "Claude");
 }
 
