@@ -78,7 +78,8 @@ while [ $# -gt 0 ]; do
     --panel-accounts)
       case "${2:-}" in focus|all) opt_panel="$2" ;; *) die "--panel-accounts inválido: ${2:-} (focus ou all)" ;; esac
       shift ;;
-    --pin) action="pin"; pin_arg="$(safe_id "${2:-}")"; [ -n "$pin_arg" ] || die "--pin precisa de um session_id"; shift ;;
+    --pin) case "${2:-}" in ""|-*) die "--pin precisa de um session_id" ;; esac
+           action="pin"; pin_arg="$(safe_id "${2:-}")"; [ -n "$pin_arg" ] || die "--pin precisa de um session_id"; shift ;;
     --unpin) action="unpin" ;;
     --pin-next) action="pin-next" ;;
     --list-themes) action="list-themes" ;;
@@ -318,7 +319,7 @@ out="$(jq -nrR \
                         (.windows[] | "",
                           "<b>\(title | esc)</b>",
                           "\(.model // "—" | esc) · \("compacts" | tr) \(.compacts)",
-                          "\(key("ctx"))  <tt>\(.ctx | bar)</tt>  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens)")
+                          "\("ctx" | paint($theme.label))  <tt>\(.ctx | bar)</tt>  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens)")
                     ] | join("\n")),
           class: $class,
           alt: $class,
