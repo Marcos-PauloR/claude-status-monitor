@@ -11,6 +11,8 @@
 #   --crit N      % a partir do qual fica vermelho (padrão 90)
 #   --inactive N  minutos sem atualização até esconder a janela (padrão 15)
 #   --lang L      idioma: auto (do sistema), en ou pt
+#   --theme NOME  tema de cores (default, nord, dracula, catppuccin, solarized ou seu, em ~/.config/claude-status/themes)
+#   --panel-accounts M  focus (conta da janela em foco) ou all (todas as contas)
 #   --plugin-dir  pasta de plugins do SwiftBar/xbar (alvo macos)
 #
 # Sempre: copia a ponte e o resumidor (bridge/claude-status-{bridge,summary}.sh) para
@@ -41,6 +43,8 @@ MACOS_PLUGIN="claude-status.5s.sh"
 MACOS_MARK="plugin SwiftBar/xbar"  # identifica o plugin deste projeto, mesmo renomeado
 KDE_ID="org.claudestatus.monitor"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/claude-status/config"
+THEMES_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/claude-status/themes"
+USER_THEMES="$(dirname "$CONFIG")/themes"
 
 die() { printf 'erro: %s\n' "$1" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -51,7 +55,7 @@ usage() { awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' 
 mode="install"
 targets=()
 plugin_dir=""
-opt_warn="" opt_crit="" opt_inactive="" opt_lang=""
+opt_warn="" opt_crit="" opt_inactive="" opt_lang="" opt_theme="" opt_panel=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --uninstall) mode="uninstall" ;;
@@ -67,6 +71,8 @@ while [ $# -gt 0 ]; do
     --crit) opt_crit="${2:-}"; shift ;;
     --inactive) opt_inactive="${2:-}"; shift ;;
     --lang) opt_lang="${2:-}"; shift ;;
+    --theme) opt_theme="${2:-}"; shift ;;
+    --panel-accounts) opt_panel="${2:-}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "opção desconhecida: $1 (veja --help)" ;;
   esac
@@ -109,12 +115,18 @@ warn="${opt_warn:-$(config_get warn)}"; warn="${warn:-70}"
 crit="${opt_crit:-$(config_get crit)}"; crit="${crit:-90}"
 inactive="${opt_inactive:-$(config_get inactive)}"; inactive="${inactive:-15}"
 lang="${opt_lang:-$(config_get lang)}"; lang="${lang:-auto}"
+theme="${opt_theme:-$(config_get theme)}"; theme="${theme:-default}"
+panel_accounts="${opt_panel:-$(config_get panel_accounts)}"; panel_accounts="${panel_accounts:-focus}"
 if [ "$mode" != "uninstall" ]; then
   in_range "$warn" 1 100 || die "--warn precisa ser um número de 1 a 100 (recebido: $warn)"
   in_range "$crit" 1 100 || die "--crit precisa ser um número de 1 a 100 (recebido: $crit)"
   in_range "$inactive" 1 1440 || die "--inactive precisa ser um número de 1 a 1440 (recebido: $inactive)"
   [ "$crit" -ge "$warn" ] || die "vermelho ($crit%) não pode ser menor que amarelo ($warn%)"
   case "$lang" in auto|en|pt) ;; *) die "--lang precisa ser auto, en ou pt (recebido: $lang)" ;; esac
+  case "$theme" in ''|*[!A-Za-z0-9_-]*) die "--theme inválido: $theme" ;; esac
+  [ -f "$HERE/themes/$theme.theme" ] || [ -f "$USER_THEMES/$theme.theme" ] \
+    || die "tema não encontrado: $theme (embutidos: $(cd "$HERE/themes" && ls *.theme | sed 's/\.theme$//' | tr '\n' ' '))"
+  case "$panel_accounts" in focus|all) ;; *) die "--panel-accounts precisa ser focus ou all (recebido: $panel_accounts)" ;; esac
 fi
 
 # Cria o config na primeira instalação; depois só grava as chaves das flags passadas,
@@ -139,10 +151,13 @@ write_config() {
 # Claude Status Monitor — configuração (pode editar; vale para statusline, waybar, macOS e KDE)
 # warn: % para ficar amarelo · crit: % para ficar vermelho · inactive: minutos até esconder a janela
 # lang: auto (idioma do sistema), en ou pt · targets: mostradores instalados (usado pelo --update)
+# theme: tema de cores · panel_accounts: focus ou all · account.<id>=apelido da conta (ex.: account.work=Trabalho)
 warn=$warn
 crit=$crit
 inactive=$inactive
 lang=$lang
+theme=$theme
+panel_accounts=$panel_accounts
 targets=$new
 CONF
     echo "config: $CONFIG (amarelo ${warn}%, vermelho ${crit}%, inativa após ${inactive} min, idioma $lang)"
@@ -152,6 +167,8 @@ CONF
   if [ -n "$opt_crit" ]; then config_set crit "$crit"; changed=1; fi
   if [ -n "$opt_inactive" ]; then config_set inactive "$inactive"; changed=1; fi
   if [ -n "$opt_lang" ]; then config_set lang "$lang"; changed=1; fi
+  if [ -n "$opt_theme" ]; then config_set theme "$theme"; changed=1; fi
+  if [ -n "$opt_panel" ]; then config_set panel_accounts "$panel_accounts"; changed=1; fi
   if [ "$new" != "$(targets_join $recorded)" ]; then
     config_set targets "$new"
   fi
@@ -160,6 +177,13 @@ CONF
   else
     echo "config: $CONFIG (sem alterações)"
   fi
+}
+
+# Temas embutidos num diretório de dados; os da pessoa (~/.config/claude-status/themes) nunca são tocados.
+themes_install() {
+  mkdir -p "$THEMES_DIR"
+  rm -f "$THEMES_DIR"/*.theme
+  install -m 644 "$HERE"/themes/*.theme "$THEMES_DIR/"
 }
 
 # ---------------------------------------------------------------- settings.json
@@ -249,6 +273,11 @@ gnome_install() {
     if [ -n "$opt_crit" ]; then "${gs[@]}" set "$schema" crit-threshold "$crit"; fi
     if [ -n "$opt_inactive" ]; then "${gs[@]}" set "$schema" inactive-minutes "$inactive"; fi
     if [ -n "$opt_lang" ]; then "${gs[@]}" set "$schema" language "$lang"; fi
+    # theme e panel-accounts entram no schema na T17; antes disso a chave não existe e é ignorada.
+    local keys=""
+    if [ -n "$opt_theme$opt_panel" ]; then keys="$("${gs[@]}" list-keys "$schema" 2>/dev/null || true)"; fi
+    case "$keys" in *theme*) [ -z "$opt_theme" ] || "${gs[@]}" set "$schema" theme "$theme" ;; esac
+    case "$keys" in *panel-accounts*) [ -z "$opt_panel" ] || "${gs[@]}" set "$schema" panel-accounts "$panel_accounts" ;; esac
   fi
   if have gnome-extensions && gnome-extensions enable "$GNOME_UUID" 2>/dev/null; then
     echo "gnome: extensão ativada"
@@ -368,6 +397,8 @@ update() {
   if [ -n "$opt_crit" ]; then args+=(--crit "$opt_crit"); fi
   if [ -n "$opt_inactive" ]; then args+=(--inactive "$opt_inactive"); fi
   if [ -n "$opt_lang" ]; then args+=(--lang "$opt_lang"); fi
+  if [ -n "$opt_theme" ]; then args+=(--theme "$opt_theme"); fi
+  if [ -n "$opt_panel" ]; then args+=(--panel-accounts "$opt_panel"); fi
   if [ -n "$plugin_dir" ]; then args+=(--plugin-dir "$plugin_dir"); fi
   if [ -n "${list// /}" ]; then echo "update: reinstalando (alvos: ${list% })"
   else echo "update: reinstalando só a ponte (nenhum mostrador instalado foi encontrado)"; fi
@@ -383,6 +414,7 @@ elif [ "$mode" = "install" ]; then
   install -m 755 "$HERE/bridge/claude-status-bridge.sh" "$BRIDGE"
   install -m 755 "$HERE/bridge/claude-status-summary.sh" "$SUMMARY"
   echo "ponte instalada em $BRIDGE (resumidor: $SUMMARY)"
+  themes_install
   write_config
   update_settings
   for t in ${targets[@]+"${targets[@]}"}; do "${t}_install"; done
@@ -390,6 +422,7 @@ elif [ "$mode" = "install" ]; then
 else
   for t in ${targets[@]+"${targets[@]}"}; do "${t}_uninstall"; done
   rm -f "$BRIDGE" "$SUMMARY"
+  rm -rf "$THEMES_DIR"; rmdir "$(dirname "$THEMES_DIR")" 2>/dev/null || true
   echo "ponte e resumidor removidos de $BIN_DIR"
   update_settings
   write_config

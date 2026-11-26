@@ -3,7 +3,7 @@
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-export HOME="$TMP/home" LANG=C; unset CLAUDE_CONFIG_DIR XDG_CONFIG_HOME LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG
+export HOME="$TMP/home" LANG=C; unset CLAUDE_CONFIG_DIR XDG_CONFIG_HOME XDG_DATA_HOME LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG
 S="$HOME/.claude/settings.json"; B="$HOME/.local/bin/claude-status-bridge.sh"; R="$HOME/.local/bin/claude-status-summary.sh"
 # Permissão em octal: GNU (Linux) ou BSD (macOS).
 mode() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
@@ -219,5 +219,29 @@ eq "git pull falha: exit 1, nada reinstalado" "true" "$([ "$RC" = 1 ] && grep -q
 rm -rf "$CLONE/.git"
 up --update
 eq "sem .git: exit 1 com instrução" "true" "$([ "$RC" = 1 ] && grep -q 'não é um clone' <<<"$OUT" && echo true || echo false)"
+
+echo "== temas e contas (v1.3)"
+rm -rf "$HOME/.config/claude-status" "$HOME/.local/share/claude-status"
+C="$HOME/.config/claude-status/config"
+T="$HOME/.local/share/claude-status/themes"
+inst
+eq "primeira instalação: theme e panel_accounts" "default focus" "$(cval theme) $(cval panel_accounts)"
+eq "temas embutidos copiados" "catppuccin.theme default.theme dracula.theme nord.theme solarized.theme" "$(ls "$T" | tr '\n' ' ' | sed 's/ $//')"
+inst --theme nord --panel-accounts all
+eq "flags gravam no config" "nord all" "$(cval theme) $(cval panel_accounts)"
+before="$(cat "$C")"
+inst --theme naoexiste
+eq "tema inexistente: exit 1 e config intacto" "1 true" "$RC $([ "$(cat "$C")" = "$before" ] && echo true || echo false)"
+inst --panel-accounts xx
+eq "--panel-accounts inválido: exit 1" 1 "$RC"
+mkdir -p "$HOME/.config/claude-status/themes"
+printf 'name=Meu\nwarn=#123456\n' > "$HOME/.config/claude-status/themes/meu.theme"
+inst --theme meu
+eq "tema da pessoa aceito" "0 meu" "$RC $(cval theme)"
+inst
+eq "reinstalar não toca nos temas da pessoa" "name=Meu|warn=#123456" "$(paste -sd'|' "$HOME/.config/claude-status/themes/meu.theme")"
+inst --uninstall
+eq "desinstalar remove os embutidos e mantém os da pessoa" "false true" \
+  "$([ -e "$T" ] && echo true || echo false) $([ -f "$HOME/.config/claude-status/themes/meu.theme" ] && echo true || echo false)"
 
 echo; echo "Resultado: $PASS ok, $FAIL falha(s)"; [ "$FAIL" -eq 0 ]

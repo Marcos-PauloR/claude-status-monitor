@@ -13,6 +13,8 @@ export XDG_CACHE_HOME="$TMP/cache"
 # Isola do ambiente de quem roda os testes: sem config, idioma inglês.
 export XDG_CONFIG_HOME="$TMP/config"
 CONF="$XDG_CONFIG_HOME/claude-status/config"
+THEMES="$XDG_CONFIG_HOME/claude-status/themes"
+export XDG_DATA_HOME="$TMP/data"
 export LANG=C
 unset LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG CLAUDE_STATUS_WARN CLAUDE_STATUS_CRIT CLAUDE_STATUS_INACTIVE_MINUTES
 BASE="$XDG_CACHE_HOME/claude-status"
@@ -29,6 +31,7 @@ eq() { # eq <descrição> <esperado> <obtido>
 }
 
 reset() { rm -rf "$BASE"; mkdir -p "$SESS"; }
+conf() { mkdir -p "$(dirname "$CONF")"; printf '%s\n' "$@" > "$CONF"; }
 
 # snap <id> <segundos atrás> [filtro jq aplicado ao snapshot base]
 snap() {
@@ -111,7 +114,7 @@ echo "== janelas no menu (RF03)"
 reset
 snap a 10 '.project = "my-app" | .session_name = "core" | .context = {used_pct: 75, window: 1000000, tokens: 750000} | .compacts = 3'
 eq "dados da janela" \
-  '{"id":"a","project":"my-app","name":"core","model":"Opus 5.5","ctx":75,"tokens":750000,"window":1000000,"compacts":3,"level":1}' \
+  '{"id":"a","account":"default","project":"my-app","name":"core","model":"Opus 5.5","ctx":75,"tokens":750000,"window":1000000,"compacts":3,"level":1,"pinned":false}' \
   "$(json '.windows[0]')"
 
 echo "== compacts da semana (RF09)"
@@ -181,7 +184,7 @@ eq "ctx da janela" "ctx  ███████▌░░  75%  750k / 1M | font=M
 eq "segunda janela" "true" "$(grep -q '^Sonnet 5.5 · compacts 0 | size=11 color=#888888$' <<<"$out" && echo true || echo false)"
 eq "abrir pasta" "Open data folder | bash=/usr/bin/open param1=$BASE terminal=false" "$(grep '^Open data folder' <<<"$out")"
 eq "atualizar" "Refresh | refresh=true" "$(tail -1 <<<"$out")"
-eq "nenhuma linha de conteúdo começa com --" "0" "$(grep -c '^--[^-]' <<<"$out")"
+eq "nenhuma linha de conteúdo começa com -- (só as ações de submenu Fixar/Desafixar)" "0" "$(grep '^--[^-]' <<<"$out" | grep -vc '^--\(Pin to panel\|Unpin\) | bash=')"
 eq "SwiftBar: cor clara/escura" "✳ ctx 75% · session 31% · weekly 92% | color=#d63c25,#ff7b63" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | head -1)"
 reset
 snap a 10 "$(limits 10 10)"
@@ -204,7 +207,6 @@ snap a 10
 eq "sem limits" "session  no data yet" "$(sb | sed -n 3p)"
 
 echo "== config único (T12)"
-conf() { mkdir -p "$(dirname "$CONF")"; printf '%s\n' "$@" > "$CONF"; }
 reset
 snap a 1 '.context.used_pct = 55'
 conf '# limiares' 'warn=50' ' crit = 60 ' 'desconhecida=1'
@@ -259,6 +261,112 @@ eq "SwiftBar: sem dados com cor de texto" "true" "$(SWIFTBAR=1 "$SUMMARY" --form
 reset
 eq "SwiftBar: nenhuma janela com cor de texto" "nenhuma janela ativa | color=#1d1d1f,#f5f5f7" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | sed -n 3p)"
 rm -f "$CONF"
+
+echo "== contas (v1.3)"
+reset
+snap d1 10 '.context.used_pct = 42 | '"$(limits 31 12)"
+snap w1 20 '.account = "work" | .model = "Sonnet 5.5" | '"$(limits 78 40)"
+snap w2 30 '.account = "work"'
+eq "contas: default primeiro" '["default","work"]' "$(json '[.accounts[].id]')"
+eq "cota por conta" '[[31,12],[78,40]]' "$(json '[.accounts[] | [.session.pct, .weekly.pct]]')"
+eq "janelas por conta" '[["d1"],["w1","w2"]]' "$(json '[.accounts[] | [.windows[].id]]')"
+eq "janela traz a conta" '["default","work","work"]' "$(json '[.windows[].account]')"
+eq "topo = janela em foco e sua conta" '["d1",42,31,12]' "$(json '[.focus.id, .ctx, .session.pct, .weekly.pct]')"
+eq "multi" 'true' "$(json .multi)"
+eq "nível por conta" '[0,1]' "$(json '[.accounts[].level]')"
+eq "texto focus com conta" "default · Opus 5.5 · ctx 42% · session 31% · resets 1h12 · compacts 0 · weekly 12%" "$(text)"
+eq "texto all" "Opus 5.5 · ctx 42% · default 31%/12% · work 78%/40%" "$(text --panel-accounts all)"
+conf 'account.work=Trabalho' 'panel_accounts=all'
+eq "apelido" '["default","Trabalho"]' "$(json '[.accounts[].label]')"
+eq "panel_accounts do config" "Opus 5.5 · ctx 42% · default 31%/12% · Trabalho 78%/40%" "$(text)"
+eq "--panel-accounts vence o config" '"focus"' "$("$SUMMARY" --format json --panel-accounts focus | jq .panel_accounts)"
+eq "--panel-accounts inválido: exit 2" 2 "$("$SUMMARY" --panel-accounts xx >/dev/null 2>&1; echo $?)"
+rm -f "$CONF"
+printf '{"ts":%d,"session_id":"d1"}\n{"ts":%d,"session_id":"w1","account":"work"}\n{"ts":%d,"session_id":"w2","account":"work"}\n' \
+  $NOW $NOW $NOW > "$BASE/compacts.jsonl"
+eq "compacts da semana por conta" '[1,2]' "$(json '[.accounts[].week_compacts]')"
+eq "topo: compacts da semana da conta em foco" 1 "$(json .week_compacts)"
+tip="$("$SUMMARY" --format waybar | jq -r .tooltip)"
+eq "tooltip: cabeçalho por conta" "true" "$(grep -q '^<b>default</b>$' <<<"$tip" && grep -q '^<b>work</b>$' <<<"$tip" && echo true || echo false)"
+eq "waybar all" "Opus 5.5 · ctx 42% · default 31%/12% · work 78%/40%" "$("$SUMMARY" --format waybar --panel-accounts all | jq -r .text)"
+out="$("$SUMMARY" --format swiftbar)"
+eq "swiftbar: cabeçalho por conta" "true" "$(grep -q '^default | size=13' <<<"$out" && grep -q '^work | size=13' <<<"$out" && echo true || echo false)"
+
+reset
+snap d1 10
+snap wold 3600 '.account = "work" | '"$(limits 50 50)"
+eq "conta sem janela ativa mas com cota aparece" '[["default",1],["work",0]]' "$(json '[.accounts[] | [.id, (.windows | length)]]')"
+reset
+snap d1 10
+snap wold 3600 '.account = "work" | '"$(limits 50 50 -1 -1)"
+eq "conta sem janela e com cota resetada some" '["default"]' "$(json '[.accounts[].id]')"
+eq "uma conta: multi false" 'false' "$(json .multi)"
+eq "uma conta: texto igual à v1.2" "Opus 5.5 · ctx 10% · compacts 0" "$(text)"
+
+echo "== janela fixada (v1.3)"
+reset
+snap a 10 '.context.used_pct = 42'
+snap b 20 '.context.used_pct = 7'
+eq "--pin: exit 0 sem saída" "0:" "$("$SUMMARY" --pin b; echo "$?:")"
+eq "--pin grava o id" "b" "$(cat "$BASE/pinned")"
+eq "foco = fixada" '["b",7,"b"]' "$(json '[.focus.id, .ctx, .pinned]')"
+eq "janela fixada marcada" '[false,true]' "$(json '[.windows[].pinned]')"
+eq "texto usa a fixada" "Opus 5.5 · ctx 7% · compacts 0" "$(text)"
+out="$("$SUMMARY" --format swiftbar)"
+eq "swiftbar: 📌 e ação Desafixar" "true" "$(grep -q '^📌 proj-b' <<<"$out" && grep -qF -- "--Unpin | bash=$SUMMARY param1=--unpin terminal=false refresh=true" <<<"$out" && echo true || echo false)"
+eq "swiftbar: ação Fixar nas outras" "true" "$(grep -qF -- "--Pin to panel | bash=$SUMMARY param1=--pin param2=a terminal=false refresh=true" <<<"$out" && echo true || echo false)"
+eq "tooltip: 📌 na fixada" "true" "$("$SUMMARY" --format waybar | jq -r .tooltip | grep -q '^<b>📌 proj-b</b>$' && echo true || echo false)"
+"$SUMMARY" --unpin
+eq "--unpin apaga" "false" "$([ -e "$BASE/pinned" ] && echo true || echo false)"
+eq "--unpin sem arquivo: exit 0" 0 "$("$SUMMARY" --unpin; echo $?)"
+printf 'sumiu\n' > "$BASE/pinned"
+eq "órfã: foco = mais recente" '["a",null]' "$(json '[.focus.id, .pinned]')"
+eq "órfã: arquivo apagado" "false" "$([ -e "$BASE/pinned" ] && echo true || echo false)"
+snap b 3600
+printf 'b\n' > "$BASE/pinned"
+eq "fixada inativa: ignorada e apagada" '"a"/false' "$(json .focus.id)/$([ -e "$BASE/pinned" ] && echo true || echo false)"
+: > "$BASE/pinned"
+eq "pinned vazio: sem fixação" '"a"' "$(json .focus.id)"
+eq "--pin sem id: exit 2" 2 "$("$SUMMARY" --pin >/dev/null 2>&1; echo $?)"
+"$SUMMARY" --pin 'a/../b'
+eq "--pin saneia o id" "a____b" "$(cat "$BASE/pinned")"
+
+reset
+snap d1 10
+snap d2 20
+snap w1 5 '.account = "work"'
+order=""
+for _ in 1 2 3 4 5; do
+  "$SUMMARY" --pin-next
+  order="$order $(cat "$BASE/pinned" 2>/dev/null || echo -)"
+done
+eq "--pin-next: por conta, depois mais recente; após a última desafixa" " d1 d2 w1 - d1" "$order"
+
+echo "== temas (v1.3)"
+reset
+snap a 10 "$(limits 80 20)"
+eq "padrão: default" '{"id":"default","name":"Default","normal":"","warn":"#f6d32d","crit":"#ff7b63","label":"","bar":"#78aeed","accent":""}' "$(json .theme)"
+eq "embutido via flag" '["nord","Nord","#ebcb8b"]' "$("$SUMMARY" --format json --theme nord | jq -c '[.theme.id, .theme.name, .theme.warn]')"
+conf 'theme=dracula'
+eq "tema do config" '"Dracula"' "$(json .theme.name)"
+mkdir -p "$THEMES"
+printf 'name=Meu Dracula\nwarn=#123\n' > "$THEMES/dracula.theme"
+eq "o da pessoa vence o embutido; chave ausente vem do default" '["Meu Dracula","#123","#ff7b63"]' "$(json '[.theme.name, .theme.warn, .theme.crit]')"
+printf 'name=Ruim\nwarn=amarelo\ncrit=#12345\n' > "$THEMES/ruim.theme"
+conf 'theme=ruim'
+eq "cor inválida vira a do default" '["#f6d32d","#ff7b63"]' "$(json '[.theme.warn, .theme.crit]' 2>/dev/null)"
+eq "cor inválida gera log" "true" "$("$SUMMARY" --format json 2>&1 >/dev/null | grep -q 'cor inválida em warn' && echo true || echo false)"
+conf 'theme=naoexiste'
+eq "tema inexistente: default" '"default"' "$(json .theme.id 2>/dev/null)"
+eq "tema inexistente: log e exit 0" "true/0" "$("$SUMMARY" 2>&1 >/dev/null | grep -q 'tema não encontrado: naoexiste' && echo true || echo false)/$("$SUMMARY" >/dev/null 2>&1; echo $?)"
+conf 'theme=nord'
+eq "waybar: texto com a cor do nível" '<span color="#ebcb8b">ctx 10% · session 80% · resets 1h12 · weekly 20%</span>' "$("$SUMMARY" --format waybar | jq -r .text)"
+eq "waybar: barra normal com a cor bar" "true" "$("$SUMMARY" --format waybar | jq -r .tooltip | grep -q 'span color="#5e81ac"' && echo true || echo false)"
+eq "swiftbar: cor do tema (mesma nos dois modos)" "true" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | grep -q '^session  .* color=#ebcb8b$' && echo true || echo false)"
+rm -f "$CONF"
+eq "--list-themes: default primeiro, sem repetir" '["default","catppuccin","dracula","nord","ruim","solarized"]' "$("$SUMMARY" --list-themes | jq -c 'map(.id)')"
+eq "--list-themes: nome do arquivo da pessoa" '"Meu Dracula"' "$("$SUMMARY" --list-themes | jq -c '.[] | select(.id == "dracula") | .name')"
+rm -rf "$THEMES"
 
 echo "== robustez"
 reset

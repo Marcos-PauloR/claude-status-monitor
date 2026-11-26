@@ -1,0 +1,8 @@
+# Cores padrão do Claude Status Monitor. Valor vazio = cor do texto do desktop.
+name=Default
+normal=
+warn=#f6d32d
+crit=#ff7b63
+label=
+bar=#78aeed
+accent=

@@ -13,7 +13,7 @@ export XDG_CACHE_HOME="$TMP/cache"
 # Isola do ambiente de quem roda os testes: sem config, idioma inglês.
 export XDG_CONFIG_HOME="$TMP/config"
 export LANG=C
-unset LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG
+unset LC_ALL LC_MESSAGES CLAUDE_STATUS_LANG CLAUDE_CONFIG_DIR
 SESS="$XDG_CACHE_HOME/claude-status/sessions"
 
 PASS=0
@@ -175,6 +175,32 @@ start=$(now_ms)
 for _ in $(seq 20); do "$BRIDGE" < "$FX/full.json" > /dev/null; done
 avg_ms=$(( ($(now_ms) - start) / 20 ))
 eq "média ${avg_ms} ms < 50 ms" "true" "$([ "$avg_ms" -lt 50 ] && echo true || echo false)"
+
+echo "== conta (v1.3)"
+acct() { # acct <CLAUDE_CONFIG_DIR> | acct -unset  -> imprime .account do snapshot
+  rm -rf "$SESS"
+  if [ "$1" = "-unset" ]; then "$BRIDGE" < "$FX/full.json" >/dev/null
+  else CLAUDE_CONFIG_DIR="$1" "$BRIDGE" < "$FX/full.json" >/dev/null; fi
+  snap sess-full-001 .account
+}
+eq "sem CLAUDE_CONFIG_DIR: default" '"default"' "$(acct -unset)"
+eq "vazio: default" '"default"' "$(acct '')"
+eq "~/.claude: default" '"default"' "$(acct "$HOME/.claude")"
+eq "~/.claude/ com barra: default" '"default"' "$(acct "$HOME/.claude/")"
+eq "~/.claude-work: work" '"work"' "$(acct "$HOME/.claude-work")"
+eq "~/.minha-conta/: minha-conta" '"minha-conta"' "$(acct "$HOME/.minha-conta/")"
+eq "~/.x/: x" '"x"' "$(acct "$HOME/.x/")"
+eq "sem ponto: basename" '"contas"' "$(acct /srv/contas)"
+eq "caracteres inseguros saneados" '"w_rk_1"' "$(acct "$HOME/.claude-w rk.1")"
+eq "/: default" '"default"' "$(acct /)"
+rm -f "$XDG_CACHE_HOME/claude-status/compacts.jsonl"  # histórico de testes anteriores adicionaria "compacts N"
+eq "statusline não mostra a conta" "Opus 5.5 · ctx 42% · session 31% · weekly 12%" \
+  "$(CLAUDE_CONFIG_DIR="$HOME/.claude-work" "$BRIDGE" < "$FX/full.json")"
+rm -f "$XDG_CACHE_HOME/claude-status/compacts.jsonl"
+CLAUDE_CONFIG_DIR="$HOME/.claude-work" "$BRIDGE" --compact < "$FX/pre-compact.json"
+"$BRIDGE" --compact < "$FX/pre-compact.json"
+eq "compacts.jsonl grava a conta" '["work","default"]' \
+  "$(jq -sc 'map(.account)' "$XDG_CACHE_HOME/claude-status/compacts.jsonl")"
 
 echo
 echo "Resultado: $PASS ok, $FAIL falha(s)"

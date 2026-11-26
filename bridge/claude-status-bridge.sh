@@ -11,6 +11,7 @@
 # e imprime uma statusline curta. Nunca falha: qualquer erro vira a linha mínima.
 # Idioma da statusline: CLAUDE_STATUS_LANG > lang= em ~/.config/claude-status/config >
 # idioma do sistema (pt_* -> português, resto inglês).
+# Grava também a conta (CLAUDE_CONFIG_DIR, v1.3).
 
 exec 2>/dev/null
 
@@ -38,6 +39,22 @@ esac
 # Só caracteres seguros no nome do arquivo (evita path traversal).
 safe_id() { printf '%s' "${1//[^A-Za-z0-9_-]/_}"; }
 
+# Conta = CLAUDE_CONFIG_DIR (herdado pela statusline e pelos hooks). Ausente, vazio ou
+# ~/.claude -> default; senão o basename sem ".claude-" (ou sem o "." inicial), saneado.
+account_id() {
+  local d="${CLAUDE_CONFIG_DIR:-}" b
+  while [ "${d%/}" != "$d" ]; do d="${d%/}"; done
+  if [ -z "$d" ] || [ "$d" = "$HOME/.claude" ]; then printf 'default'; return; fi
+  b="${d##*/}"
+  case "$b" in
+    .claude-*) b="${b#.claude-}" ;;
+    .*) b="${b#.}" ;;
+  esac
+  b="$(safe_id "$b")"
+  printf '%s' "${b:-default}"
+}
+account="$(account_id)"
+
 # write_atomic <destino> <conteúdo>
 write_atomic() {
   local tmp
@@ -57,10 +74,10 @@ case "${1:-}" in
     # Registra o compact no histórico e descarta entradas com mais de HIST_DAYS dias.
     old=""
     [ -f "$HIST" ] && old="$(cat "$HIST")"
-    new="$(jq -nrc --arg old "$old" --argjson days "$HIST_DAYS" --argjson ev "$input" '
+    new="$(jq -nrc --arg old "$old" --arg account "$account" --argjson days "$HIST_DAYS" --argjson ev "$input" '
       (now | floor) as $now
       | ($old | split("\n")[] | select(length > 0) | fromjson? | objects | select(.ts >= $now - $days * 86400)),
-        ($ev | select(.session_id) | { ts: $now, session_id, trigger: (.trigger // null) })
+        ($ev | select(.session_id) | { ts: $now, session_id, trigger: (.trigger // null), account: $account })
       | tojson
     ')" || exit 0
     mkdir -p "$BASE" && write_atomic "$HIST" "$new"
@@ -72,7 +89,7 @@ hist_file="$HIST"
 [ -f "$hist_file" ] || hist_file=/dev/null
 
 # Uma única chamada ao jq: linha 1 = session_id, linha 2 = statusline, linha 3 = snapshot.
-out="$(jq -r --rawfile hist "$hist_file" --arg lang "$lang" '
+out="$(jq -r --rawfile hist "$hist_file" --arg lang "$lang" --arg account "$account" '
   def pct: if type == "number" then round else null end;
   def tr: if $lang == "pt" then ({ session: "sessão", weekly: "semana", compacts: "compactações" }[.] // .) else . end;
   def window($w): if ($w | type) == "object"
@@ -87,6 +104,7 @@ out="$(jq -r --rawfile hist "$hist_file" --arg lang "$lang" '
       schema: 1,
       updated_at: (now | floor),
       session_id: $sid,
+      account: $account,
       session_name: .session_name,
       project: ((.workspace.project_dir // .workspace.current_dir // .cwd // "")
                 | rtrimstr("/") | split("/") | last | select(. != "") // null),
