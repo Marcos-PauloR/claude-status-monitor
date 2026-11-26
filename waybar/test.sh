@@ -80,5 +80,50 @@ CLAUDE_STATUS_SUMMARY=/bin/false CLAUDE_STATUS_NO_INOTIFY=1 CLAUDE_STATUS_POLL=1
 wait_for .text "Claude ?" 3; eq "resumidor falhando: linha de fallback" "Claude ?" "$(last .text)"
 stop
 
+echo "== config.jsonc (trecho do waybar)"
+# O arquivo é um trecho (chave sem chaves externas) com comentários //: embrulha e limpa.
+CFG="$(grep -v '^[[:space:]]*//' "$HERE/config.jsonc" | { echo '{'; cat; echo '}'; } | jq -c '."custom/claude"' 2>/dev/null)"
+eq "config é JSON válido" "object" "$(jq -r type <<<"$CFG" 2>/dev/null)"
+eq "on-click alterna a fixada" "~/.local/bin/claude-status-summary.sh --pin-next" "$(jq -r '."on-click"' <<<"$CFG")"
+eq "on-click-right abre a pasta" "xdg-open ~/.cache/claude-status" "$(jq -r '."on-click-right"' <<<"$CFG")"
+
+pin_click() { # roda o on-click com o resumidor de teste (o "~/.local/bin/" vira o caminho do repositório)
+  "$CLAUDE_STATUS_SUMMARY" --pin-next
+}
+wait_tip() { # wait_tip <regex> <segundos>: espera o tooltip da última linha casar
+  local i=0 max=$(( $2 * 10 ))
+  while [ $i -lt $max ]; do
+    last .tooltip | grep -q "$1" && return 0
+    sleep 0.1; i=$((i + 1))
+  done
+  return 1
+}
+write_acc() { # write_acc <id> <conta> <ctx>
+  mkdir -p "$SESS"
+  jq -nc --arg id "$1" --arg a "$2" --argjson t "$(date +%s)" --argjson ctx "$3" \
+    '{schema: 1, session_id: $id, account: $a, updated_at: $t, model: "Opus 5.5", project: "my-app", context: {used_pct: $ctx}, limits: null}' \
+    > "$SESS/.$1.tmp" && mv -f "$SESS/.$1.tmp" "$SESS/$1.json"
+}
+click_suite() { # click_suite <nome> <segundos aceitos>
+  echo "== clique fixa a janela (modo $1)"
+  rm -rf "$XDG_CACHE_HOME"
+  write_acc w1 default 42
+  write_acc w2 work 78
+  start
+  wait_for .class normal 3
+  eq "sem fixada: nenhum 📌" "false" "$(last .tooltip | grep -q '📌' && echo true || echo false)"
+  pin_click
+  eq "pin-next grava pinned" "true" "$([ -f "$XDG_CACHE_HOME/claude-status/pinned" ] && echo true || echo false)"
+  wait_tip '📌' "$2"; eq "📌 no tooltip em até $2 s" "true" "$(last .tooltip | grep -q '📌' && echo true || echo false)"
+  eq "uma só linha de 📌" "1" "$(last .tooltip | grep -c '📌')"
+  pin_click; pin_click
+  wait_tip '📌' "$2"; eq "continua fixando ao alternar" "true" "$(last .tooltip | grep -q '📌' && echo true || echo false)"
+  stop
+}
+CLAUDE_STATUS_NO_INOTIFY=1 CLAUDE_STATUS_POLL=1 click_suite consulta 3
+if command -v inotifywait >/dev/null; then
+  CLAUDE_STATUS_POLL=30 click_suite inotify 2
+fi
+
 printf '\nResultado: %d ok, %d falha(s)\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

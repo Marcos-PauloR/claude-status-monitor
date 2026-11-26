@@ -7,5 +7,7 @@
     "restart-interval": 5,
     "format": "✳ {}",
     "tooltip": true,
-    "on-click": "xdg-open ~/.cache/claude-status"
+    // clique: alterna a janela fixada no painel; botão direito: abre a pasta de dados
+    "on-click": "~/.local/bin/claude-status-summary.sh --pin-next",
+    "on-click-right": "xdg-open ~/.cache/claude-status"
 }
