@@ -7,6 +7,9 @@ import {
     countSince, formatDuration, formatTokens, isSnapshotName, level, parseCompacts, parseSnapshot, summarize, weekStart,
 } from './store.js';
 import {SnapshotWatcher} from './watcher.js';
+import {parseConfig} from './config.js';
+import {DEFAULT_THEME, isColor, listThemes, loadTheme, parseTheme} from './themes.js';
+import {accountOf, parseCompactEvents} from './store.js';
 import {PT_KEYS, resolveLanguage, translator} from './i18n.js';
 
 let pass = 0, fail = 0;
@@ -99,7 +102,7 @@ s = summarize([
     snap('b', 60, {project: 'outro'}),
 ], NOW);
 eq('janelas na ordem', ['a', 'b'], s.windows.map(w => w.id));
-eq('dados da janela', {id: 'a', project: 'my-app', name: 'core', model: 'Opus 5.5', ctx: 75, tokens: 750000,
+eq('dados da janela', {id: 'a', account: 'default', pinned: false, project: 'my-app', name: 'core', model: 'Opus 5.5', ctx: 75, tokens: 750000,
     window: 1000000, compacts: 3, level: 1}, s.windows[0]);
 eq('cota session com reset', {pct: 40, resetsIn: 4320, reset: false}, s.quotas.session);
 eq('cota weekly com reset', {pct: 20, resetsIn: 86400 * 3, reset: false}, s.quotas.weekly);
@@ -126,6 +129,68 @@ s = summarize([snap('a', 10, {context: {used_pct: 60}, limits: limits(60, 60)})]
     {warn: 55, crit: 90, thresholds: {session: {warn: 70, crit: 95}}});
 eq('sem override usa o geral; com override usa o próprio', {ctx: 1, session: 0, weekly: 1}, s.levels);
 eq('sem limits: níveis 0', {ctx: 0, session: 0, weekly: 0}, summarize([snap('a', 1)], NOW).levels);
+
+print('== contas (v1.3)');
+{
+    const snaps = [
+        snap('d1', 10, {context: {used_pct: 42}, limits: limits(31, 12)}),
+        snap('w1', 20, {account: 'work', model: 'Sonnet 5.5', limits: limits(78, 40)}),
+        snap('w2', 30, {account: 'work'}),
+    ];
+    const events = [{ts: NOW, account: 'default'}, {ts: NOW, account: 'work'}, {ts: NOW, account: 'work'}];
+    const s = summarize(snaps, NOW, {events, labels: {work: 'Trabalho'}});
+    eq('contas: default primeiro', ['default', 'work'], s.accounts.map(a => a.id));
+    eq('apelido', ['default', 'Trabalho'], s.accounts.map(a => a.label));
+    eq('cota por conta', [[31, 12], [78, 40]], s.accounts.map(a => [a.session, a.weekly]));
+    eq('janelas por conta', [['d1'], ['w1', 'w2']], s.accounts.map(a => a.windows.map(w => w.id)));
+    eq('compacts da semana por conta', [1, 2], s.accounts.map(a => a.weekCompacts));
+    eq('topo = janela em foco e sua conta', ['d1', 42, 31, 12], [s.focus.id, s.ctx, s.session, s.weekly]);
+    eq('multi', true, s.multi);
+}
+eq('accountOf sem campo', 'default', accountOf({}));
+eq('accountOf saneia', 'w_rk', accountOf({account: 'w/rk'}));
+eq('parseCompactEvents', [{ts: 1, account: 'default'}, {ts: 2, account: 'work'}],
+    parseCompactEvents('{"ts":1}\n{"ts":2,"account":"work"}\nlixo\n'));
+{
+    const snaps = [snap('d1', 10), snap('wold', 3600, {account: 'work', limits: limits(50, 50, NOW - 1, NOW - 1)})];
+    eq('conta sem janela e com cota resetada some', ['default'], summarize(snaps, NOW).accounts.map(a => a.id));
+    const snaps2 = [snap('d1', 10), snap('wold', 3600, {account: 'work', limits: limits(50, 50)})];
+    eq('conta sem janela mas com cota aparece', [1, 0], summarize(snaps2, NOW).accounts.map(a => a.windows.length));
+}
+
+print('== janela fixada (v1.3)');
+{
+    const snaps = [snap('a', 10, {context: {used_pct: 42}}), snap('b', 20, {context: {used_pct: 7}})];
+    const s = summarize(snaps, NOW, {pinned: 'b'});
+    eq('foco = fixada', ['b', 7, true], [s.focus.id, s.ctx, s.pinnedValid]);
+    eq('janela fixada marcada', [false, true], s.windows.map(w => w.pinned));
+    eq('órfã: foco = mais recente e inválida', ['a', false], (r => [r.focus.id, r.pinnedValid])(summarize(snaps, NOW, {pinned: 'sumiu'})));
+    eq('sem fixação: pinnedValid true', true, summarize(snaps, NOW).pinnedValid);
+}
+
+print('== config e temas (v1.3)');
+eq('apelidos do config', {labels: {work: 'Trabalho', 'w_x': 'X'}},
+    parseConfig('# c\naccount.work = Trabalho\naccount.w/x=X\naccount.vazio=\nwarn=70\n'));
+eq('isColor', [true, true, false, false], ['#abc', '#a1b2c3', 'amarelo', '#12345'].map(isColor));
+{
+    const {theme, errors} = parseTheme('ruim', 'name=Ruim\nwarn=amarelo\ncrit=#123\n');
+    eq('tema parcial: chave ausente/inválida vem do default', ['Ruim', DEFAULT_THEME.warn, '#123', DEFAULT_THEME.bar],
+        [theme.name, theme.warn, theme.crit, theme.bar]);
+    eq('tema: erro registrado', 1, errors.length);
+}
+{
+    const tmp = GLib.dir_make_tmp('cs-themes-XXXXXX');
+    const user = GLib.build_filenamev([tmp, 'user']), data = GLib.build_filenamev([tmp, 'data']);
+    GLib.mkdir_with_parents(user, 0o755);
+    GLib.mkdir_with_parents(data, 0o755);
+    GLib.file_set_contents(GLib.build_filenamev([data, 'nord.theme']), 'name=Nord\nwarn=#ebcb8b\n');
+    GLib.file_set_contents(GLib.build_filenamev([user, 'nord.theme']), 'name=Meu Nord\n');
+    GLib.file_set_contents(GLib.build_filenamev([user, 'meu.theme']), 'name=Meu\n');
+    eq('o da pessoa vence', ['Meu Nord', DEFAULT_THEME.warn], (t => [t.name, t.warn])(loadTheme('nord', [user, data])));
+    eq('inexistente: default', 'default', loadTheme('naoexiste', [user, data]).id);
+    eq('lista: default primeiro, sem repetir', ['default', 'meu', 'nord'], listThemes([user, data]).map(t => t.id));
+    GLib.spawn_command_line_sync(`rm -rf ${tmp}`);
+}
 
 print('== i18n (T13)');
 eq('auto com pt_BR', 'pt', resolveLanguage('auto', ['pt_BR.UTF-8', 'pt_BR', 'pt', 'C']));

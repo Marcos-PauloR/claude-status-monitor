@@ -1,5 +1,5 @@
 // Claude Status Monitor — preferências (Adw), no estilo do system-monitor-next:
-// General (limiares gerais, idioma, inatividade, posição), Indicators (ordem por arrastar,
+// General (tema, limiares gerais, idioma, inatividade, contas no painel, posição), Indicators (ordem por arrastar,
 // liga/desliga e limiares próprios por indicador) e About.
 
 import Adw from 'gi://Adw';
@@ -12,6 +12,7 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import {resolveLanguage, translator} from './i18n.js';
+import {listThemes} from './themes.js';
 
 // Indicadores do painel: descrição e se têm limiares de cor próprios.
 const INDICATORS = {
@@ -25,6 +26,7 @@ const INDICATORS = {
 const KEYS = Object.keys(INDICATORS);
 const BOXES = ['left', 'center', 'right'];
 const LANGUAGES = ['auto', 'en', 'pt'];
+const PANEL_ACCOUNTS = ['focus', 'all'];
 const REPO = 'https://github.com/Marcos-PauloR/claude-status-monitor';
 
 function spinRow(title, subtitle, lower, upper, value) {
@@ -101,6 +103,25 @@ export default class ClaudeStatusPreferences extends ExtensionPreferences {
             if (settings.get_int('warn-threshold') > settings.get_int('crit-threshold'))
                 settings.set_int('warn-threshold', settings.get_int('crit-threshold'));
         });
+        // Tema: embutidos + os da pessoa (listados ao abrir a janela); grava o id em `theme`.
+        const themes = listThemes();
+        const theme = new Adw.ComboRow({
+            title: t('Theme'),
+            subtitle: t('Themes live in ~/.config/claude-status/themes.'),
+            model: Gtk.StringList.new(themes.map(x => x.name)),
+            selected: Math.max(0, themes.findIndex(x => x.id === settings.get_string('theme'))),
+        });
+        theme.connect('notify::selected', () => {
+            const value = themes[theme.selected]?.id;
+            if (value && value !== settings.get_string('theme'))
+                settings.set_string('theme', value);
+        });
+        watch('theme', () => {
+            const i = themes.findIndex(x => x.id === settings.get_string('theme'));
+            if (i >= 0)
+                theme.selected = i;
+        });
+        colors.add(theme);
         colors.add(warn);
         colors.add(crit);
         page.add(colors);
@@ -125,6 +146,19 @@ export default class ClaudeStatusPreferences extends ExtensionPreferences {
             settings.get_int('inactive-minutes'));
         settings.bind('inactive-minutes', inactive, 'value', Gio.SettingsBindFlags.DEFAULT);
         windows.add(inactive);
+        const accounts = new Adw.ComboRow({
+            title: t('Accounts in panel'),
+            model: Gtk.StringList.new([t('Account of the focused window'), t('All accounts')]),
+            selected: Math.max(0, PANEL_ACCOUNTS.indexOf(settings.get_string('panel-accounts'))),
+        });
+        accounts.connect('notify::selected', () => {
+            const value = PANEL_ACCOUNTS[accounts.selected];
+            if (value && value !== settings.get_string('panel-accounts'))
+                settings.set_string('panel-accounts', value);
+        });
+        watch('panel-accounts', () =>
+            (accounts.selected = Math.max(0, PANEL_ACCOUNTS.indexOf(settings.get_string('panel-accounts')))));
+        windows.add(accounts);
         page.add(windows);
 
         const position = new Adw.PreferencesGroup({title: t('Panel position')});

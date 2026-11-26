@@ -273,11 +273,8 @@ gnome_install() {
     if [ -n "$opt_crit" ]; then "${gs[@]}" set "$schema" crit-threshold "$crit"; fi
     if [ -n "$opt_inactive" ]; then "${gs[@]}" set "$schema" inactive-minutes "$inactive"; fi
     if [ -n "$opt_lang" ]; then "${gs[@]}" set "$schema" language "$lang"; fi
-    # theme e panel-accounts entram no schema na T17; antes disso a chave não existe e é ignorada.
-    local keys=""
-    if [ -n "$opt_theme$opt_panel" ]; then keys="$("${gs[@]}" list-keys "$schema" 2>/dev/null || true)"; fi
-    case "$keys" in *theme*) [ -z "$opt_theme" ] || "${gs[@]}" set "$schema" theme "$theme" ;; esac
-    case "$keys" in *panel-accounts*) [ -z "$opt_panel" ] || "${gs[@]}" set "$schema" panel-accounts "$panel_accounts" ;; esac
+    if [ -n "$opt_theme" ]; then "${gs[@]}" set "$schema" theme "$theme"; fi
+    if [ -n "$opt_panel" ]; then "${gs[@]}" set "$schema" panel-accounts "$panel_accounts"; fi
   fi
   if have gnome-extensions && gnome-extensions enable "$GNOME_UUID" 2>/dev/null; then
     echo "gnome: extensão ativada"

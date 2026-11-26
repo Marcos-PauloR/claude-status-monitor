@@ -12,6 +12,11 @@
     <value nick="pt" value="2"/>
   </enum>
 
+  <enum id="org.gnome.shell.extensions.claude-status.panel-accounts">
+    <value nick="focus" value="0"/>
+    <value nick="all" value="1"/>
+  </enum>
+
   <schema id="org.gnome.shell.extensions.claude-status" path="/org/gnome/shell/extensions/claude-status/">
     <key name="warn-threshold" type="i">
       <range min="1" max="100"/>
@@ -57,6 +62,16 @@
       <range min="0" max="20"/>
       <default>1</default>
       <summary>Position inside the panel area</summary>
+    </key>
+    <key name="theme" type="s">
+      <default>'default'</default>
+      <summary>Color theme</summary>
+      <description>Theme id: a file &lt;id&gt;.theme in ~/.config/claude-status/themes or ~/.local/share/claude-status/themes.</description>
+    </key>
+    <key name="panel-accounts" enum="org.gnome.shell.extensions.claude-status.panel-accounts">
+      <default>'focus'</default>
+      <summary>Accounts in the panel</summary>
+      <description>focus shows the account of the focused window; all shows the quotas of every account.</description>
     </key>
   </schema>
 </schemalist>

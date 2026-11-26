@@ -82,3 +82,17 @@
 .claude-status-bar-fill.claude-status-crit {
     background-color: #ff7b63;
 }
+
+/* v1.3: grupos por conta (modo all) e janela fixada no menu */
+
+.claude-status-group-row {
+    spacing: 6px;
+}
+
+.claude-status-menu-title-row {
+    spacing: 4px;
+}
+
+.claude-status-menu-pin {
+    icon-size: 12px;
+}

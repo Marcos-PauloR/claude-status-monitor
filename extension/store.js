@@ -97,6 +97,73 @@ export function readCompacts(path = compactsFile()) {
     }
 }
 
+// Conta do snapshot ou do evento de compact (v1.3): sem campo = default; saneada como na ponte.
+export function accountOf(o) {
+    const a = o?.account;
+    return typeof a === 'string' && a ? a.replace(/[^A-Za-z0-9_-]/g, '_') : 'default';
+}
+const accountOrder = (a, b) => (a === b ? 0 : a === 'default' ? -1 : b === 'default' ? 1 : a < b ? -1 : 1);
+
+// Conteúdo de compacts.jsonl -> [{ts, account}]. Linhas inválidas são ignoradas.
+export function parseCompactEvents(text) {
+    const events = [];
+    for (const line of text.split('\n')) {
+        try {
+            const e = JSON.parse(line);
+            const t = num(e?.ts);
+            if (t !== null)
+                events.push({ts: t, account: accountOf(e)});
+        } catch {}
+    }
+    return events;
+}
+
+// Lê compacts.jsonl com a conta de cada evento. Ausente ou ilegível vira lista vazia.
+export function readCompactEvents(path = compactsFile()) {
+    try {
+        const [, bytes] = Gio.File.new_for_path(path).load_contents(null);
+        return parseCompactEvents(new TextDecoder().decode(bytes));
+    } catch (e) {
+        if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+            console.warn(`claude-status: ignorando compacts.jsonl: ${e.message}`);
+        return [];
+    }
+}
+
+// Janela fixada no painel (v1.3): uma linha com o session_id saneado.
+export function pinnedFile() {
+    return GLib.build_filenamev([dataDir(), 'pinned']);
+}
+
+export function readPinned(path = pinnedFile()) {
+    try {
+        const [, bytes] = Gio.File.new_for_path(path).load_contents(null);
+        const id = new TextDecoder().decode(bytes).split('\n')[0].trim().replace(/[^A-Za-z0-9_-]/g, '_');
+        return id || null;
+    } catch {
+        return null;
+    }
+}
+
+// file_set_contents grava num temporário e renomeia (escrita atômica).
+export function writePinned(id, path = pinnedFile()) {
+    try {
+        GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755);
+        GLib.file_set_contents(path, `${String(id).replace(/[^A-Za-z0-9_-]/g, '_')}\n`);
+    } catch (e) {
+        console.warn(`claude-status: não foi possível gravar ${path}: ${e.message}`);
+    }
+}
+
+export function clearPinned(path = pinnedFile()) {
+    try {
+        Gio.File.new_for_path(path).delete(null);
+    } catch (e) {
+        if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+            console.warn(`claude-status: não foi possível apagar ${path}: ${e.message}`);
+    }
+}
+
 // Início da janela semanal atual (RF09): resets_at − 7 dias; sem limits, os últimos 7 dias.
 export function weekStart(limits, now) {
     const resetsAt = num(limits?.seven_day?.resets_at);
@@ -132,53 +199,88 @@ export function level(pct, thresholds = {warn: 70, crit: 90}) {
 }
 
 /**
- * Resumo para o painel e o menu (RF01–RF07).
+ * Resumo para o painel e o menu (RF01–RF07; contas e janela fixada na v1.3).
  * @param {Iterable<object>} snapshots
  * @param {number} now epoch em segundos
  * @param {{inactiveMinutes?: number, warn?: number, crit?: number,
- *          thresholds?: Object<string, {warn: number, crit: number}>}} opts
+ *          thresholds?: Object<string, {warn: number, crit: number}>,
+ *          pinned?: string|null, labels?: Object<string, string>, events?: {ts: number, account: string}[]}} opts
  *   warn/crit são os limiares gerais; `thresholds` sobrescreve por indicador (ctx, session, weekly).
+ *   `pinned` é o id (saneado) da janela fixada; `labels` são os apelidos das contas; `events` vêm de
+ *   readCompactEvents().
  * @returns {null | {model, ctx, compacts, session, sessionResets, weekly, level, levels, active, windows,
- *                   quotas, weekStart}}
+ *                   quotas, weekStart, weekCompacts, focus, accounts, multi, pinnedValid}}
+ *   Os campos do topo são da janela em foco (fixada ou mais recente) e da conta dela.
  */
 export function summarize(snapshots, now, opts = {}) {
-    const {inactiveMinutes = 15, warn = 70, crit = 90, thresholds = {}} = opts;
+    const {inactiveMinutes = 15, warn = 70, crit = 90, thresholds = {}, pinned = null, labels = {}, events = []} = opts;
     const lv = (key, p) => level(p, {warn, crit, ...thresholds[key]});
     const all = [...snapshots].filter(Boolean).sort((a, b) => b.updated_at - a.updated_at);
     const active = all.filter(s => now - s.updated_at < inactiveMinutes * 60);
     if (active.length === 0)
         return null;
 
-    // A cota é da conta: vale o snapshot mais recente que a tenha, mesmo de janela inativa.
-    const latest = active[0];
-    const withLimits = all.find(s => s.limits);
-    const session = quota(withLimits?.limits?.five_hour, now);
-    const weekly = quota(withLimits?.limits?.seven_day, now);
-    const ctx = num(latest.context?.used_pct);
-    const levels = {ctx: lv('ctx', ctx), session: lv('session', session?.pct), weekly: lv('weekly', weekly?.pct)};
+    const pinnedSnap = pinned ? active.find(s => s.session_id.replace(/[^A-Za-z0-9_-]/g, '_') === pinned) : null;
+    const toWindow = w => ({
+        id: w.session_id,
+        account: accountOf(w),
+        pinned: w === pinnedSnap,
+        project: w.project ?? null,
+        name: w.session_name ?? null,
+        model: w.model ?? null,
+        ctx: num(w.context?.used_pct),
+        tokens: num(w.context?.tokens),
+        window: num(w.context?.window),
+        compacts: num(w.compacts) ?? 0,
+        level: lv('ctx', w.context?.used_pct),
+    });
+    const windows = active.map(toWindow);
 
+    // A cota é da conta: vale o snapshot mais recente dela que a tenha, mesmo de janela inativa.
+    // Conta listada = tem janela ativa ou cota ainda não resetada.
+    const ids = [...new Set(all.map(accountOf))].sort(accountOrder);
+    const accounts = ids.map(id => {
+        const withLimits = all.find(s => accountOf(s) === id && s.limits);
+        const session = quota(withLimits?.limits?.five_hour, now);
+        const weekly = quota(withLimits?.limits?.seven_day, now);
+        const since = weekStart(withLimits?.limits, now);
+        const levels = {session: lv('session', session?.pct), weekly: lv('weekly', weekly?.pct)};
+        return {
+            id,
+            label: labels[id] ?? id,
+            session: session?.pct ?? null,
+            sessionResets: session?.resetsIn ?? null,
+            weekly: weekly?.pct ?? null,
+            quotas: {session, weekly},
+            weekStart: since,
+            weekCompacts: events.filter(e => e.account === id && e.ts >= since).length,
+            level: Math.max(levels.session, levels.weekly),
+            levels,
+            windows: windows.filter(w => w.account === id),
+        };
+    }).filter(a => a.windows.length > 0 || a.quotas.session?.reset === false || a.quotas.weekly?.reset === false);
+
+    const focusSnap = pinnedSnap ?? active[0];
+    const focus = windows[active.indexOf(focusSnap)];
+    const acc = accounts.find(a => a.id === focus.account);
+    const levels = {ctx: focus.level, session: acc.levels.session, weekly: acc.levels.weekly};
     return {
-        model: latest.model ?? 'Claude',
-        ctx,
-        compacts: num(latest.compacts) ?? 0,
-        session: session?.pct ?? null,
-        sessionResets: session?.resetsIn ?? null,
-        weekly: weekly?.pct ?? null,
+        model: focusSnap.model ?? 'Claude',
+        ctx: focus.ctx,
+        compacts: focus.compacts,
+        session: acc.session,
+        sessionResets: acc.sessionResets,
+        weekly: acc.weekly,
         level: Math.max(levels.ctx, levels.session, levels.weekly),
         levels,
         active,
-        windows: active.map(w => ({
-            id: w.session_id,
-            project: w.project ?? null,
-            name: w.session_name ?? null,
-            model: w.model ?? null,
-            ctx: num(w.context?.used_pct),
-            tokens: num(w.context?.tokens),
-            window: num(w.context?.window),
-            compacts: num(w.compacts) ?? 0,
-            level: lv('ctx', w.context?.used_pct),
-        })),
-        quotas: {session, weekly},
-        weekStart: weekStart(withLimits?.limits, now),
+        windows,
+        quotas: acc.quotas,
+        weekStart: acc.weekStart,
+        weekCompacts: acc.weekCompacts,
+        focus,
+        accounts,
+        multi: accounts.length > 1,
+        pinnedValid: !pinned || !!pinnedSnap,
     };
 }

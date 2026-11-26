@@ -229,6 +229,9 @@ eq "primeira instalação: theme e panel_accounts" "default focus" "$(cval theme
 eq "temas embutidos copiados" "catppuccin.theme default.theme dracula.theme nord.theme solarized.theme" "$(ls "$T" | tr '\n' ' ' | sed 's/ $//')"
 inst --theme nord --panel-accounts all
 eq "flags gravam no config" "nord all" "$(cval theme) $(cval panel_accounts)"
+stub gsettings; : > "$LOG"
+inst --target gnome --theme nord --panel-accounts all
+eq "gnome: --theme e --panel-accounts vão para o GSettings" "true" "$(grep -q 'set org.gnome.shell.extensions.claude-status theme nord' "$LOG" && grep -q 'set org.gnome.shell.extensions.claude-status panel-accounts all' "$LOG" && echo true || echo false)"
 before="$(cat "$C")"
 inst --theme naoexiste
 eq "tema inexistente: exit 1 e config intacto" "1 true" "$RC $([ "$(cat "$C")" = "$before" ] && echo true || echo false)"
