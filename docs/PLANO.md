@@ -39,6 +39,18 @@ Pedido após o feedback do primeiro usuário externo: instalação mais simples,
 
 **MVP mais barato:** T1 + T2 + T3 (~170–320k). Esse conjunto já entrega o número no painel e a statusline no terminal. Menu e preferências podem vir depois.
 
+### v1.3 — contas, janela fixada e temas
+
+Spec: `docs/superpowers/specs/2026-11-26-contas-fixar-temas-design.md`. Plano detalhado (passos, testes e código): `docs/superpowers/plans/2026-11-26-v1.3-contas-fixar-temas.md`.
+
+| # | Task | Entregável |
+|---|---|---|
+| T16 | Núcleo | `account` na ponte (via `CLAUDE_CONFIG_DIR`), `pinned`, temas embutidos em `themes/`, resumidor por conta (`accounts`, `focus`, `--pin`/`--unpin`/`--pin-next`, `--theme`, `--panel-accounts`, `--list-themes`), `install.sh --theme --panel-accounts` |
+| T17 | GNOME | `config.js`/`themes.js`, store por conta e fixação, menu em seções, fixar no menu, painel `focus`/`all`, cores do tema inline, prefs (Tema, Contas no painel) |
+| T18 | KDE | popup por conta, botão fixar, painel e cores do tema, configuração (Tema, Contas no painel) |
+| T19 | waybar + macOS | clique do waybar → `--pin-next`; testes de integração; validação em container |
+| T20 | Docs e versão | SPEC, README PT/EN (várias contas, apelidos, fixar, criar tema), versão 1.3, STATUS |
+
 ## Riscos
 
 | Risco | Mitigação |
