@@ -33,6 +33,7 @@ eq "Stop intacto" '[{"matcher":"","hooks":[{"type":"command","command":"echo sto
 eq "outras chaves intactas" '"opus"' "$(jq -c .model "$S")"
 eq "permissão preservada" "600" "$(mode "$S")"
 eq "mostra o comando de atualizar com a pasta real" "true" "$(grep -qF "cd \"$HERE\" && ./install.sh --update" <<<"$OUT" && echo true || echo false)"
+eq "avisa dos temas copiados" "true" "$(grep -qF "temas: $HOME/.local/share/claude-status/themes (catppuccin, default, dracula, nord, solarized)" <<<"$OUT" && echo true || echo false)"
 eq "avisa sobre statusLine substituída" "true" "$(grep -q 'old-statusline' <<<"$OUT" && echo true || echo false)"
 
 echo "== reinstalar é idempotente"

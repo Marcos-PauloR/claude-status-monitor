@@ -184,6 +184,9 @@ themes_install() {
   mkdir -p "$THEMES_DIR"
   rm -f "$THEMES_DIR"/*.theme
   install -m 644 "$HERE"/themes/*.theme "$THEMES_DIR/"
+  local names="" f
+  for f in "$HERE"/themes/*.theme; do f="$(basename "$f" .theme)"; names="${names:+$names, }$f"; done
+  echo "temas: $THEMES_DIR ($names)"
 }
 
 # ---------------------------------------------------------------- settings.json

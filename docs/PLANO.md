@@ -39,7 +39,7 @@ Pedido após o feedback do primeiro usuário externo: instalação mais simples,
 
 **MVP mais barato:** T1 + T2 + T3 (~170–320k). Esse conjunto já entrega o número no painel e a statusline no terminal. Menu e preferências podem vir depois.
 
-### v1.3 — contas, janela fixada e temas
+### v1.3 — contas, janela fixada e temas ✅ concluída
 
 Spec: `docs/superpowers/specs/2026-11-26-contas-fixar-temas-design.md`. Plano detalhado (passos, testes e código): `docs/superpowers/plans/2026-11-26-v1.3-contas-fixar-temas.md`.
 
