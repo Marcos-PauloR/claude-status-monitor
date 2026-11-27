@@ -40,6 +40,7 @@ const PT = {
     'Account of the focused window': 'Conta da janela em foco',
     'All accounts': 'Todas as contas',
     'Theme': 'Tema',
+    'not found': 'não encontrado',
     'Themes live in ~/.config/claude-status/themes.': 'Os temas ficam em ~/.config/claude-status/themes.',
     'Panel position': 'Posição no painel',
     'Area': 'Área',

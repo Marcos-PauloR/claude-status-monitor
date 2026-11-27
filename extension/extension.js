@@ -128,6 +128,8 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         this._box.add_child(this._groupsBox);
         this._groups = new Map();
         this._groupKey = '';
+        this._menuKey = null;
+        this._infoItems = [];
 
         this._buildMenu();
         this.connect('destroy', () => {
@@ -263,38 +265,70 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
     }
 
     // Uma seção por conta: [cabeçalho, se houver mais de uma], cotas, compacts da semana, janelas.
+    // Só reconstrói quando a estrutura muda (contas, janelas, fixada, tema, idioma); senão troca
+    // o conteúdo das linhas informativas no lugar, para um clique em Fixar não se perder durante
+    // o streaming com o menu aberto.
     _updateMenu(s) {
-        this._accountsSection.removeAll();
+        const key = JSON.stringify([
+            this._t('Unpin'), this._theme, this._labelStyle(),
+            s && [s.multi, s.accounts.map(a => [a.id, a.label, a.windows.map(w => [w.id, w.pinned])])],
+        ]);
+        const rebuild = key !== this._menuKey;
+        this._menuKey = key;
+        const section = this._accountsSection;
+        let n = 0;
+        const info = actor => {
+            if (rebuild) {
+                const item = infoItem(actor);
+                this._infoItems.push(item);
+                section.addMenuItem(item);
+            } else {
+                const item = this._infoItems[n++];
+                item.get_children().forEach(c => c.destroy());
+                item.add_child(actor);
+            }
+        };
+        const add = make => {
+            if (rebuild)
+                section.addMenuItem(make());
+        };
+        if (rebuild) {
+            section.removeAll();
+            this._infoItems = [];
+        }
         if (!s) {
-            this._accountsSection.addMenuItem(infoItem(new St.Label({text: this._t('no active windows')})));
+            info(new St.Label({text: this._t('no active windows')}));
             return;
         }
         s.accounts.forEach((a, i) => {
-            const section = this._accountsSection;
             if (i > 0)
-                section.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+                add(() => new PopupMenu.PopupSeparatorMenuItem());
             if (s.multi) {
-                const header = new PopupMenu.PopupMenuItem(a.label, {reactive: false, can_focus: false});
-                header.label.style = `font-weight: bold; ${colorStyle(this._theme.accent)}`;
-                section.addMenuItem(header);
+                add(() => {
+                    const header = new PopupMenu.PopupMenuItem(a.label, {reactive: false, can_focus: false});
+                    header.label.style = `font-weight: bold; ${colorStyle(this._theme.accent)}`;
+                    return header;
+                });
             }
-            section.addMenuItem(infoItem(this._quotaRow('session', a.quotas.session, a.levels.session)));
-            section.addMenuItem(infoItem(this._quotaRow('weekly', a.quotas.weekly, a.levels.weekly)));
+            info(this._quotaRow('session', a.quotas.session, a.levels.session));
+            info(this._quotaRow('weekly', a.quotas.weekly, a.levels.weekly));
             // Com o menu fechado não há eventos (a contagem é refeita ao abrir).
-            section.addMenuItem(infoItem(new St.Label({
+            info(new St.Label({
                 text: `${this._t('compacts this week')}: ${a.weekCompacts}`,
                 style_class: 'claude-status-menu-detail',
                 style: this._labelStyle(),
-            })));
+            }));
             if (a.windows.length > 0)
-                section.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+                add(() => new PopupMenu.PopupSeparatorMenuItem());
             for (const w of a.windows) {
-                section.addMenuItem(infoItem(this._windowBox(w)));
-                const pin = new PopupMenu.PopupImageMenuItem(w.pinned ? this._t('Unpin') : this._t('Pin to panel'),
-                    'view-pin-symbolic');
-                pin.label.style = this._labelStyle();
-                pin.connect('activate', () => this._setPinned(w.pinned ? null : w.id));
-                section.addMenuItem(pin);
+                info(this._windowBox(w));
+                add(() => {
+                    const pin = new PopupMenu.PopupImageMenuItem(w.pinned ? this._t('Unpin') : this._t('Pin to panel'),
+                        'view-pin-symbolic');
+                    pin.label.style = this._labelStyle();
+                    pin.connect('activate', () => this._setPinned(w.pinned ? null : w.id));
+                    return pin;
+                });
             }
         });
     }
@@ -396,7 +430,7 @@ class ClaudeStatusIndicator extends PanelMenu.Button {
         this._empty.text = s ? 'Claude' : 'Claude —';
         this._empty.visible = !s || shown === 0;
         this._columns.visible = !!s && mainFields.length > 0;
-        this._groupsBox.visible = !!s && all;
+        this._groupsBox.visible = !!s && all && fields.some(k => k === 'session' || k === 'weekly');
         this._accountColumn.visible = !!s && !all && s.multi && shown > 0;
         for (const label of this._titles)
             label.style = this._labelStyle();

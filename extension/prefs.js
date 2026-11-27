@@ -104,7 +104,12 @@ export default class ClaudeStatusPreferences extends ExtensionPreferences {
                 settings.set_int('warn-threshold', settings.get_int('crit-threshold'));
         });
         // Tema: embutidos + os da pessoa (listados ao abrir a janela); grava o id em `theme`.
+        // Um id que não existe mais (arquivo apagado) aparece como "<id> (não encontrado)",
+        // em vez de cair em Default sem a pessoa saber.
         const themes = listThemes();
+        const current = settings.get_string('theme');
+        if (current && !themes.some(x => x.id === current))
+            themes.push({id: current, name: `${current} (${t('not found')})`});
         const theme = new Adw.ComboRow({
             title: t('Theme'),
             subtitle: t('Themes live in ~/.config/claude-status/themes.'),
