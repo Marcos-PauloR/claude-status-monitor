@@ -237,7 +237,8 @@ export function summarize(snapshots, now, opts = {}) {
     const windows = active.map(toWindow);
 
     // A cota é da conta: vale o snapshot mais recente dela que a tenha, mesmo de janela inativa.
-    // Conta listada = tem janela ativa ou cota ainda não resetada.
+    // Conta listada = tem janela ativa ou cota ainda não resetada de um snapshot de até 7 dias
+    // (cota sem resets_at nunca reseta e listaria a conta para sempre).
     const ids = [...new Set(all.map(accountOf))].sort(accountOrder);
     const accounts = ids.map(id => {
         const withLimits = all.find(s => accountOf(s) === id && s.limits);
@@ -257,8 +258,11 @@ export function summarize(snapshots, now, opts = {}) {
             level: Math.max(levels.session, levels.weekly),
             levels,
             windows: windows.filter(w => w.account === id),
+            fresh: !!withLimits && now - withLimits.updated_at < WEEK,
         };
-    }).filter(a => a.windows.length > 0 || a.quotas.session?.reset === false || a.quotas.weekly?.reset === false);
+    }).filter(a => a.windows.length > 0
+        || (a.fresh && (a.quotas.session?.reset === false || a.quotas.weekly?.reset === false)))
+        .map(({fresh, ...a}) => a);
 
     const focusSnap = pinnedSnap ?? active[0];
     const focus = windows[active.indexOf(focusSnap)];

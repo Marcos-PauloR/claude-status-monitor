@@ -311,6 +311,12 @@ snap wold 3600 '.account = "work" | '"$(limits 50 50 -1 -1)"
 eq "conta sem janela e com cota resetada some" '["default"]' "$(json '[.accounts[].id]')"
 eq "uma conta: multi false" 'false' "$(json .multi)"
 eq "uma conta: texto igual à v1.2" "Opus 5.5 · ctx 10% · compacts 0" "$(text)"
+reset
+snap d1 10
+snap wold $((8 * 86400)) '.account = "work" | .limits = { five_hour: { used_pct: 50 }, seven_day: { used_pct: 50 } }'
+eq "conta sem janela, sem resets_at e parada há > 7 d some" '["default"]' "$(json '[.accounts[].id]')"
+snap wold $((6 * 86400)) '.account = "work" | .limits = { five_hour: { used_pct: 50 }, seven_day: { used_pct: 50 } }'
+eq "conta sem janela, sem resets_at e parada há < 7 d aparece" '["default","work"]' "$(json '[.accounts[].id]')"
 
 echo "== janela fixada (v1.3)"
 reset

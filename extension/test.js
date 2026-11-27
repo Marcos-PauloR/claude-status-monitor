@@ -4,12 +4,12 @@ import GLib from 'gi://GLib';
 import System from 'system';
 
 import {
-    countSince, formatDuration, formatTokens, isSnapshotName, level, parseCompacts, parseSnapshot, summarize, weekStart,
+    accountOf, countSince, formatDuration, formatTokens, isSnapshotName, level, parseCompactEvents, parseCompacts,
+    parseSnapshot, summarize, weekStart,
 } from './store.js';
 import {SnapshotWatcher} from './watcher.js';
 import {parseConfig} from './config.js';
 import {DEFAULT_THEME, isColor, listThemes, loadTheme, parseTheme} from './themes.js';
-import {accountOf, parseCompactEvents} from './store.js';
 import {PT_KEYS, resolveLanguage, translator} from './i18n.js';
 
 let pass = 0, fail = 0;
@@ -156,6 +156,11 @@ eq('parseCompactEvents', [{ts: 1, account: 'default'}, {ts: 2, account: 'work'}]
     eq('conta sem janela e com cota resetada some', ['default'], summarize(snaps, NOW).accounts.map(a => a.id));
     const snaps2 = [snap('d1', 10), snap('wold', 3600, {account: 'work', limits: limits(50, 50)})];
     eq('conta sem janela mas com cota aparece', [1, 0], summarize(snaps2, NOW).accounts.map(a => a.windows.length));
+    const stale = {five_hour: {used_pct: 50}, seven_day: {used_pct: 50}};
+    const snaps3 = [snap('d1', 10), snap('wold', 8 * 86400, {account: 'work', limits: stale})];
+    eq('conta sem janela, sem resets_at e parada há > 7 d some', ['default'], summarize(snaps3, NOW).accounts.map(a => a.id));
+    const snaps4 = [snap('d1', 10), snap('wold', 6 * 86400, {account: 'work', limits: stale})];
+    eq('conta sem janela, sem resets_at e parada há < 7 d aparece', ['default', 'work'], summarize(snaps4, NOW).accounts.map(a => a.id));
 }
 
 print('== janela fixada (v1.3)');

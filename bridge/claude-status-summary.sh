@@ -265,8 +265,13 @@ out="$(jq -nrR \
       | { id: $id, label: ($names[$id] // $id), session: $session, weekly: $weekly,
           week_compacts: ([ $events[] | select(acc == $id and .ts >= $since) ] | length),
           level: ([ $session.pct, $weekly.pct ] | map(level) | max),
-          windows: [ $windows[] | select(.account == $id) ] }
-      | select((.windows | length) > 0 or (.session // {}).reset == false or (.weekly // {}).reset == false) ]
+          windows: [ $windows[] | select(.account == $id) ],
+          fresh: ($with != null and $now - $with.updated_at < 604800) }
+      # Sem janela ativa, a conta fica só enquanto tiver cota não resetada de um snapshot
+      # de até 7 dias (cota sem resets_at nunca reseta e listaria a conta para sempre).
+      | select((.windows | length) > 0
+          or (.fresh and ((.session // {}).reset == false or (.weekly // {}).reset == false)))
+      | del(.fresh) ]
   | . as $accounts
   | (if $fsnap == null then { empty: true, level: 0, windows: [], focus: null }
      else ($fsnap | win) as $focus
