@@ -216,6 +216,8 @@ out="$(jq -nrR \
     | ($p / 10 | floor) as $full | (if $p / 10 - $full >= 0.5 then 1 else 0 end) as $half
     | [ "\("█" * $full // "")\(if $half == 1 then "▌" else "" end)", "░" * (10 - $full - $half) // "" ];
   def bar: blocks as $b | "<span color=\"\(. // 0 | color)\">\($b[0])</span>\($b[1])";
+  # Valor de bash=/paramN= com espaço vai entre aspas (SwiftBar e xbar aceitam).
+  def sbarg: tostring | if test("\\s") then "\"\(.)\"" else . end;
   def sbesc: tostring | gsub("\\|"; "¦") | sub("^-"; "‐");
   # SwiftBar/xbar: o tema default mantém os pares clara/escura; os outros usam a mesma cor.
   def sbcolor: level as $l
@@ -335,7 +337,7 @@ out="$(jq -nrR \
         } end
       | tojson
     elif $format == "swiftbar" then
-      ([ "---", "\("Open data folder" | tr) | bash=/usr/bin/open param1=\($base) terminal=false", "\("Refresh" | tr) | refresh=true" ]) as $footer
+      ([ "---", "\("Open data folder" | tr) | bash=/usr/bin/open param1=\($base | sbarg) terminal=false", "\("Refresh" | tr) | refresh=true" ]) as $footer
       | if $s.empty then [ "✳ Claude —", "---", ("no active windows" | tr) + sbplain ] + $footer | join("\n")
         else [ ("✳ " + (if $panel == "all" then $sb_all_text
                         else $sbprefix + [ (if $s.ctx != null then "ctx \($s.ctx)%" else empty end),
@@ -352,8 +354,8 @@ out="$(jq -nrR \
                  "\("compacts this week" | tr): \(.week_compacts)\(sbplain)",
                  (.windows[] | "---",
                    "\(sbtitle) | size=13\(if .pinned then sbaccent else (0 | sbcolor) end)",
-                   (if .pinned then "--\("Unpin" | tr) | bash=\($self) param1=--unpin terminal=false refresh=true"
-                    else "--\("Pin to panel" | tr) | bash=\($self) param1=--pin param2=\(.id | sid) terminal=false refresh=true" end),
+                   (if .pinned then "--\("Unpin" | tr) | bash=\($self | sbarg) param1=--unpin terminal=false refresh=true"
+                    else "--\("Pin to panel" | tr) | bash=\($self | sbarg) param1=--pin param2=\(.id | sid) terminal=false refresh=true" end),
                    "\(.model // "—" | sbesc) · \("compacts" | tr) \(.compacts) | size=11 color=#888888",
                    "ctx  \(.ctx | blocks | add)  \(.ctx | pct)  \(.tokens | tokens) / \(.window | tokens) | font=Menlo size=12\(.ctx | sbcolor)"))
              ] + $footer | join("\n")

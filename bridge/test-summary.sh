@@ -185,6 +185,8 @@ eq "ctx da janela" "ctx  ███████▌░░  75%  750k / 1M | font=M
 eq "segunda janela" "true" "$(grep -q '^Sonnet 5.5 · compacts 0 | size=11 color=#888888$' <<<"$out" && echo true || echo false)"
 eq "abrir pasta" "Open data folder | bash=/usr/bin/open param1=$BASE terminal=false" "$(grep '^Open data folder' <<<"$out")"
 eq "atualizar" "Refresh | refresh=true" "$(tail -1 <<<"$out")"
+eq "caminho com espaço vai entre aspas" "Open data folder | bash=/usr/bin/open param1=\"$BASE x/claude-status\" terminal=false" \
+  "$(mkdir -p "$BASE x/claude-status/sessions" && XDG_CACHE_HOME="$BASE x" "$SUMMARY" --format swiftbar | grep '^Open data folder'; rm -rf "$BASE x")"
 eq "nenhuma linha de conteúdo começa com -- (só as ações de submenu Fixar/Desafixar)" "0" "$(grep '^--[^-]' <<<"$out" | grep -vc '^--\(Pin to panel\|Unpin\) | bash=')"
 eq "SwiftBar: cor clara/escura" "✳ ctx 75% · session 31% · weekly 92% | color=#d63c25,#ff7b63" "$(SWIFTBAR=1 "$SUMMARY" --format swiftbar | head -1)"
 reset

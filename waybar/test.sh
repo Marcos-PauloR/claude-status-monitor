@@ -87,7 +87,7 @@ eq "config é JSON válido" "object" "$(jq -r type <<<"$CFG" 2>/dev/null)"
 eq "on-click alterna a fixada" "~/.local/bin/claude-status-summary.sh --pin-next" "$(jq -r '."on-click"' <<<"$CFG")"
 eq "on-click-right abre a pasta" "xdg-open ~/.cache/claude-status" "$(jq -r '."on-click-right"' <<<"$CFG")"
 
-pin_click() { # roda o on-click com o resumidor de teste (o "~/.local/bin/" vira o caminho do repositório)
+pin_click() { # roda o on-click com o resumidor de teste ($CLAUDE_STATUS_SUMMARY no lugar do ~/.local/bin/)
   "$CLAUDE_STATUS_SUMMARY" --pin-next
 }
 wait_tip() { # wait_tip <regex> <segundos>: espera o tooltip da última linha casar
