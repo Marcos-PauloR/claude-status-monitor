@@ -221,4 +221,5 @@ Claude Code ──statusline/hooks──▶ ponte (bash + jq) ──▶ ~/.cache
 
 - Os scripts precisam rodar no bash 3.2 do macOS. Evite `mapfile`, arrays associativos, `case` dentro de `$( )` e opções só do GNU (`stat -c`, `date +%N`, `sed -i` sem sufixo).
 - Depois de mudar o schema do GNOME (`extension/schemas/*.gschema.xml`), rode `glib-compile-schemas extension/schemas`.
+- Para gerar o zip do GNOME, `gnome-extensions pack` sozinho deixa de fora os módulos extras; use `cd extension && gnome-extensions pack --force --extra-source=config.js --extra-source=i18n.js --extra-source=store.js --extra-source=themes.js --extra-source=watcher.js --extra-source=icons .`. O zip tem só a extensão: a ponte e os temas embutidos continuam vindo do `install.sh`.
 - Documentos de projeto: [especificação](docs/SPEC.md), [plano](docs/PLANO.md), [status](docs/STATUS.md).
